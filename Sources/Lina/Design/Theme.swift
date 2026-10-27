@@ -9,7 +9,7 @@ enum Theme {
     /// The single brand accent — a deep, slightly warm ink.
     static let ink = Color(nsColor: NSColor(name: "LinaInk") { appearance in
         appearance.isDark
-            ? NSColor(srgbRed: 0.66, green: 0.62, blue: 1.00, alpha: 1)
+            ? NSColor(srgbRed: 0.52, green: 0.46, blue: 0.97, alpha: 1)
             : NSColor(srgbRed: 0.29, green: 0.24, blue: 0.78, alpha: 1)
     })
 
@@ -28,7 +28,7 @@ enum Theme {
 
     static let nsInk = NSColor(name: "LinaInkNS") { appearance in
         appearance.isDark
-            ? NSColor(srgbRed: 0.66, green: 0.62, blue: 1.00, alpha: 1)
+            ? NSColor(srgbRed: 0.52, green: 0.46, blue: 0.97, alpha: 1)
             : NSColor(srgbRed: 0.29, green: 0.24, blue: 0.78, alpha: 1)
     }
 
@@ -41,7 +41,7 @@ enum Theme {
     /// The color of a thought that hasn't been written yet.
     static let nsGhost = NSColor(name: "LinaGhostNS") { appearance in
         appearance.isDark
-            ? NSColor(srgbRed: 0.66, green: 0.62, blue: 1.00, alpha: 0.55)
+            ? NSColor(srgbRed: 0.70, green: 0.66, blue: 1.00, alpha: 0.55)
             : NSColor(srgbRed: 0.29, green: 0.24, blue: 0.78, alpha: 0.45)
     }
 

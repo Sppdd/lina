@@ -18,6 +18,11 @@
     "llvm-bc" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/SelfTest.bc",
     "object" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/SelfTest.o"
   },
+  "/Users/etharo/Desktop/lina/Sources/Lina/App/Snapshots.swift" : {
+    "index-unit-output-path" : "/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Snapshots.o",
+    "llvm-bc" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Snapshots.bc",
+    "object" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Snapshots.o"
+  },
   "/Users/etharo/Desktop/lina/Sources/Lina/Core/Accessibility.swift" : {
     "index-unit-output-path" : "/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Accessibility.o",
     "llvm-bc" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Accessibility.bc",

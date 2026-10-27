@@ -5,11 +5,11 @@
       "name" : "Lina",
       "path" : "/Users/etharo/Desktop/lina",
       "projects" : [
-        "605a9fc6e6cfdfa6325056c176eac73d815937c9ac78b533799846ef37837a05",
+        "e58b1acdf699a30a1f1177fa64ac9d539eaed0ee32343840d886d283246f3394",
         "fc34c8c09c937ddaffedc688d1302334c74e126cb575eea698e7e215f1a4ad72"
       ]
     },
-    "signature" : "bd9b9f9f4296081aed506d36503642084a5341bb2f9f082b98a3f10c2d7702ef",
+    "signature" : "fb82306ae91985271e2ace0e43809e06900212dfdf1affe3cb3e040bbf03c142",
     "type" : "workspace"
   },
   {
@@ -201,6 +201,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:lina::MAINGROUP::REF_2::REF_0",
+                "name" : "DeskTextViewTests.swift",
+                "path" : "DeskTextViewTests.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_2::REF_1",
                 "name" : "SuggestionTests.swift",
                 "path" : "SuggestionTests.swift",
                 "sourceTree" : "<group>",
@@ -234,6 +242,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_2",
+                "name" : "App/Snapshots.swift",
+                "path" : "App/Snapshots.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_3",
                 "name" : "Core/Accessibility.swift",
                 "path" : "Core/Accessibility.swift",
                 "sourceTree" : "<group>",
@@ -241,7 +257,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_3",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_4",
                 "name" : "Core/Input.swift",
                 "path" : "Core/Input.swift",
                 "sourceTree" : "<group>",
@@ -249,7 +265,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_4",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_5",
                 "name" : "Core/Keychain.swift",
                 "path" : "Core/Keychain.swift",
                 "sourceTree" : "<group>",
@@ -257,7 +273,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_5",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_6",
                 "name" : "Core/LLMClient.swift",
                 "path" : "Core/LLMClient.swift",
                 "sourceTree" : "<group>",
@@ -265,7 +281,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_6",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_7",
                 "name" : "Core/Prompts.swift",
                 "path" : "Core/Prompts.swift",
                 "sourceTree" : "<group>",
@@ -273,7 +289,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_7",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_8",
                 "name" : "Core/Settings.swift",
                 "path" : "Core/Settings.swift",
                 "sourceTree" : "<group>",
@@ -281,7 +297,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_8",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_9",
                 "name" : "Core/Stats.swift",
                 "path" : "Core/Stats.swift",
                 "sourceTree" : "<group>",
@@ -289,7 +305,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_9",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_10",
                 "name" : "Design/Theme.swift",
                 "path" : "Design/Theme.swift",
                 "sourceTree" : "<group>",
@@ -297,7 +313,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_10",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_11",
                 "name" : "Desk/DeskStore.swift",
                 "path" : "Desk/DeskStore.swift",
                 "sourceTree" : "<group>",
@@ -305,7 +321,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_11",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_12",
                 "name" : "Desk/DeskTextView.swift",
                 "path" : "Desk/DeskTextView.swift",
                 "sourceTree" : "<group>",
@@ -313,7 +329,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_12",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_13",
                 "name" : "Desk/DeskView.swift",
                 "path" : "Desk/DeskView.swift",
                 "sourceTree" : "<group>",
@@ -321,7 +337,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_13",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_14",
                 "name" : "Engine/GhostEngine.swift",
                 "path" : "Engine/GhostEngine.swift",
                 "sourceTree" : "<group>",
@@ -329,7 +345,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_14",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_15",
                 "name" : "Engine/PaletteController.swift",
                 "path" : "Engine/PaletteController.swift",
                 "sourceTree" : "<group>",
@@ -337,7 +353,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_15",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_16",
                 "name" : "Engine/Targets.swift",
                 "path" : "Engine/Targets.swift",
                 "sourceTree" : "<group>",
@@ -345,7 +361,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_16",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_17",
                 "name" : "UI/GhostPanel.swift",
                 "path" : "UI/GhostPanel.swift",
                 "sourceTree" : "<group>",
@@ -353,7 +369,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_17",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_18",
                 "name" : "UI/MenuBarView.swift",
                 "path" : "UI/MenuBarView.swift",
                 "sourceTree" : "<group>",
@@ -361,7 +377,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_18",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_19",
                 "name" : "UI/OnboardingView.swift",
                 "path" : "UI/OnboardingView.swift",
                 "sourceTree" : "<group>",
@@ -369,7 +385,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_19",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_20",
                 "name" : "UI/PaletteView.swift",
                 "path" : "UI/PaletteView.swift",
                 "sourceTree" : "<group>",
@@ -377,7 +393,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_20",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_3::REF_21",
                 "name" : "UI/SettingsView.swift",
                 "path" : "UI/SettingsView.swift",
                 "sourceTree" : "<group>",
@@ -411,6 +427,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_2",
+                "name" : "App/Snapshots.swift",
+                "path" : "App/Snapshots.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_3",
                 "name" : "Core/Accessibility.swift",
                 "path" : "Core/Accessibility.swift",
                 "sourceTree" : "<group>",
@@ -418,7 +442,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_3",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_4",
                 "name" : "Core/Input.swift",
                 "path" : "Core/Input.swift",
                 "sourceTree" : "<group>",
@@ -426,7 +450,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_4",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_5",
                 "name" : "Core/Keychain.swift",
                 "path" : "Core/Keychain.swift",
                 "sourceTree" : "<group>",
@@ -434,7 +458,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_5",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_6",
                 "name" : "Core/LLMClient.swift",
                 "path" : "Core/LLMClient.swift",
                 "sourceTree" : "<group>",
@@ -442,7 +466,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_6",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_7",
                 "name" : "Core/Prompts.swift",
                 "path" : "Core/Prompts.swift",
                 "sourceTree" : "<group>",
@@ -450,7 +474,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_7",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_8",
                 "name" : "Core/Settings.swift",
                 "path" : "Core/Settings.swift",
                 "sourceTree" : "<group>",
@@ -458,7 +482,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_8",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_9",
                 "name" : "Core/Stats.swift",
                 "path" : "Core/Stats.swift",
                 "sourceTree" : "<group>",
@@ -466,7 +490,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_9",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_10",
                 "name" : "Design/Theme.swift",
                 "path" : "Design/Theme.swift",
                 "sourceTree" : "<group>",
@@ -474,7 +498,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_10",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_11",
                 "name" : "Desk/DeskStore.swift",
                 "path" : "Desk/DeskStore.swift",
                 "sourceTree" : "<group>",
@@ -482,7 +506,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_11",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_12",
                 "name" : "Desk/DeskTextView.swift",
                 "path" : "Desk/DeskTextView.swift",
                 "sourceTree" : "<group>",
@@ -490,7 +514,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_12",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_13",
                 "name" : "Desk/DeskView.swift",
                 "path" : "Desk/DeskView.swift",
                 "sourceTree" : "<group>",
@@ -498,7 +522,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_13",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_14",
                 "name" : "Engine/GhostEngine.swift",
                 "path" : "Engine/GhostEngine.swift",
                 "sourceTree" : "<group>",
@@ -506,7 +530,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_14",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_15",
                 "name" : "Engine/PaletteController.swift",
                 "path" : "Engine/PaletteController.swift",
                 "sourceTree" : "<group>",
@@ -514,7 +538,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_15",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_16",
                 "name" : "Engine/Targets.swift",
                 "path" : "Engine/Targets.swift",
                 "sourceTree" : "<group>",
@@ -522,7 +546,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_16",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_17",
                 "name" : "UI/GhostPanel.swift",
                 "path" : "UI/GhostPanel.swift",
                 "sourceTree" : "<group>",
@@ -530,7 +554,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_17",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_18",
                 "name" : "UI/MenuBarView.swift",
                 "path" : "UI/MenuBarView.swift",
                 "sourceTree" : "<group>",
@@ -538,7 +562,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_18",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_19",
                 "name" : "UI/OnboardingView.swift",
                 "path" : "UI/OnboardingView.swift",
                 "sourceTree" : "<group>",
@@ -546,7 +570,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_19",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_20",
                 "name" : "UI/PaletteView.swift",
                 "path" : "UI/PaletteView.swift",
                 "sourceTree" : "<group>",
@@ -554,7 +578,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_20",
+                "guid" : "PACKAGE:lina::MAINGROUP::REF_4::REF_21",
                 "name" : "UI/SettingsView.swift",
                 "path" : "UI/SettingsView.swift",
                 "sourceTree" : "<group>",
@@ -580,14 +604,14 @@
       "projectIsPackage" : "true",
       "projectName" : "Lina",
       "targets" : [
-        "dbfac33cbc20cc40e6b01df045d70a92fe1ae1661fcd1499f59aa12a4d989ead",
+        "1332a1ff6dd8daf72ccbb79e60e02d55e508d59fe8c3306afcc8290d4819300f",
         "6fb789abcdb42ef68965bbca9f6ec0dfce3582fcd39b8b431ae33cc139e80150",
-        "cf9094f2e7e5267ee57769828671afa37143e7f688eb6f3202307d1baf9bc19e",
-        "910c2b3b7f34015f5304e70fe722beabdbdcd27c26404ec4823e783bd8ee0b27",
+        "10cd2265acd542b960da2f46c79e4a07f70b0c52685cfc4641db0717e16bac20",
+        "14dc9583ad334d139ce312aaef76baed5bb86b2cedba27e1aa9d37909f8610b0",
         "ab8b0dba37746eacdfffe0522295adc8e081ade4e47ee72879feae41e26686b3"
       ]
     },
-    "signature" : "605a9fc6e6cfdfa6325056c176eac73d815937c9ac78b533799846ef37837a05",
+    "signature" : "e58b1acdf699a30a1f1177fa64ac9d539eaed0ee32343840d886d283246f3394",
     "type" : "project"
   },
   {
@@ -770,6 +794,15 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:lina::MAINGROUP::REF_2::REF_1",
+              "guid" : "PACKAGE-PRODUCT:lina_LinaTests.LinaTests::BUILDPHASE_0::1",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-PRODUCT:lina_LinaTests.LinaTests::BUILDPHASE_0",
@@ -819,7 +852,7 @@
       "productTypeIdentifier" : "com.apple.product-type.bundle.unit-test",
       "type" : "standard"
     },
-    "signature" : "dbfac33cbc20cc40e6b01df045d70a92fe1ae1661fcd1499f59aa12a4d989ead",
+    "signature" : "1332a1ff6dd8daf72ccbb79e60e02d55e508d59fe8c3306afcc8290d4819300f",
     "type" : "target"
   },
   {
@@ -1248,6 +1281,15 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:lina::MAINGROUP::REF_3::REF_21",
+              "guid" : "PACKAGE-PRODUCT:lina_Lina.Lina::BUILDPHASE_0::21",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-PRODUCT:lina_Lina.Lina::BUILDPHASE_0",
@@ -1273,7 +1315,7 @@
       "productTypeIdentifier" : "com.apple.product-type.tool",
       "type" : "standard"
     },
-    "signature" : "cf9094f2e7e5267ee57769828671afa37143e7f688eb6f3202307d1baf9bc19e",
+    "signature" : "10cd2265acd542b960da2f46c79e4a07f70b0c52685cfc4641db0717e16bac20",
     "type" : "target"
   },
   {
@@ -1633,6 +1675,15 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:lina::MAINGROUP::REF_4::REF_21",
+              "guid" : "PACKAGE-TARGET:Lina-633DA8E08-testable::BUILDPHASE_0::21",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-TARGET:Lina-633DA8E08-testable::BUILDPHASE_0",
@@ -1658,7 +1709,7 @@
       "productTypeIdentifier" : "org.swift.product-type.common.object",
       "type" : "standard"
     },
-    "signature" : "910c2b3b7f34015f5304e70fe722beabdbdcd27c26404ec4823e783bd8ee0b27",
+    "signature" : "14dc9583ad334d139ce312aaef76baed5bb86b2cedba27e1aa9d37909f8610b0",
     "type" : "target"
   },
   {

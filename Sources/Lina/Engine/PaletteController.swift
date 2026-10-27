@@ -162,6 +162,15 @@ final class PaletteController: ObservableObject {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Puts the palette into a given state without a model call (used for snapshots).
+    func preview(target: WritingTarget, action: WritingAction?, phase: Phase, result: String = "", options: [String] = []) {
+        self.target = target
+        running = action
+        self.phase = phase
+        self.result = result
+        self.options = options
+    }
+
     func back() {
         task?.cancel()
         phase = .choosing

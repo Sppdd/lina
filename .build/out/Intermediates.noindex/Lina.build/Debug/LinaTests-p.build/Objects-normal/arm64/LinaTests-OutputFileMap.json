@@ -16,6 +16,16 @@
     "swift-dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/test_entry_point.swiftdeps",
     "swiftmodule" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/test_entry_point~partial.swiftmodule"
   },
+  "/Users/etharo/Desktop/lina/Tests/LinaTests/DeskTextViewTests.swift" : {
+    "const-values" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/DeskTextViewTests.swiftconstvalues",
+    "dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/DeskTextViewTests.d",
+    "diagnostics" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/DeskTextViewTests.dia",
+    "index-unit-output-path" : "/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/DeskTextViewTests.o",
+    "llvm-bc" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/DeskTextViewTests.bc",
+    "object" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/DeskTextViewTests.o",
+    "swift-dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/DeskTextViewTests.swiftdeps",
+    "swiftmodule" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/DeskTextViewTests~partial.swiftmodule"
+  },
   "/Users/etharo/Desktop/lina/Tests/LinaTests/SuggestionTests.swift" : {
     "const-values" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/SuggestionTests.swiftconstvalues",
     "dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/LinaTests-p.build/Objects-normal/arm64/SuggestionTests.d",

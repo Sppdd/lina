@@ -57,11 +57,12 @@ final class DeskTextView: NSTextView {
     }
 
     static let bodyFont = Theme.nsSerif(19)
+    static let titleFont = Theme.nsSerif(30, weight: .bold)
 
     static let paragraph: NSParagraphStyle = {
         let p = NSMutableParagraphStyle()
         p.lineHeightMultiple = 1.42
-        p.paragraphSpacing = 12
+        p.paragraphSpacing = 2
         return p
     }()
 
@@ -72,9 +73,30 @@ final class DeskTextView: NSTextView {
     func load(_ text: String) {
         mutatingGhost = true
         textStorage?.setAttributedString(NSAttributedString(string: text, attributes: Self.baseAttributes))
+        styleTitle()
         mutatingGhost = false
         setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
         applyFocus()
+    }
+
+    /// The first line of a page is its title, set large like a chapter heading.
+    private func styleTitle() {
+        guard let storage = textStorage, storage.length > 0 else { return }
+        let ns = storage.string as NSString
+        let first = ns.paragraphRange(for: NSRange(location: 0, length: 0))
+        let wasMutating = mutatingGhost
+        mutatingGhost = true
+        storage.beginEditing()
+        storage.addAttribute(.font, value: Self.titleFont, range: first)
+        if NSMaxRange(first) < storage.length {
+            storage.addAttribute(.font, value: Self.bodyFont,
+                                 range: NSRange(location: NSMaxRange(first), length: storage.length - NSMaxRange(first)))
+        }
+        storage.endEditing()
+        mutatingGhost = wasMutating
+        let loc = selectedRange().location
+        let inTitle = loc < NSMaxRange(first) || (loc == ns.length && !ns.substring(with: first).hasSuffix("\n"))
+        typingAttributes[.font] = inTitle ? Self.titleFont : Self.bodyFont
     }
 
     /// The page's text without any ghost.
@@ -117,14 +139,17 @@ final class DeskTextView: NSTextView {
         clearGhost()
         let loc = selectedRange().location
         var attrs = Self.baseAttributes
+        attrs[.font] = typingAttributes[.font] ?? Self.bodyFont
         attrs[.foregroundColor] = Theme.nsGhost
         attrs[.linaGhost] = true
         mutatingGhost = true
         storage.beginEditing()
         storage.insert(NSAttributedString(string: text, attributes: attrs), at: loc)
         storage.endEditing()
+        let font = attrs[.font]
         setSelectedRange(NSRange(location: loc, length: 0))
         typingAttributes = Self.baseAttributes
+        typingAttributes[.font] = font
         mutatingGhost = false
     }
 
@@ -200,6 +225,7 @@ final class DeskTextView: NSTextView {
     override func didChangeText() {
         super.didChangeText()
         guard !mutatingGhost else { return }
+        styleTitle()
         onTextChange?(cleanString)
         schedulePause()
     }

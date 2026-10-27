@@ -98,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Snapshots.runIfRequested(engine: engine)
         NSApp.setActivationPolicy(.accessory)
         if let icon = Bundle.main.image(forResource: "AppIcon") { NSApp.applicationIconImage = icon }
 

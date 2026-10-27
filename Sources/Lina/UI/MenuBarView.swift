@@ -101,6 +101,7 @@ struct MenuBarView: View {
                 Text("of \(goal) words today")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .fixedSize()
                 if stats.streak > 1 {
                     Text("\(stats.streak)-day streak")
                         .font(.system(size: 11, weight: .medium))
@@ -112,12 +113,12 @@ struct MenuBarView: View {
                 }
             }
             Spacer()
-            HStack(alignment: .bottom, spacing: 4) {
+            HStack(alignment: .bottom, spacing: 3) {
                 ForEach(Array(week.enumerated()), id: \.offset) { i, day in
                     VStack(spacing: 3) {
                         RoundedRectangle(cornerRadius: 2, style: .continuous)
                             .fill(i == week.count - 1 ? Theme.ink : Theme.ink.opacity(0.3))
-                            .frame(width: 7, height: max(3, 36 * CGFloat(day.words) / CGFloat(peak)))
+                            .frame(width: 6, height: max(3, 36 * CGFloat(day.words) / CGFloat(peak)))
                         Text(day.label).font(.system(size: 8.5, weight: .medium)).foregroundStyle(.tertiary)
                     }
                 }
@@ -200,15 +201,18 @@ struct ToggleRow: View {
     @Binding var isOn: Bool
 
     var body: some View {
-        Toggle(isOn: $isOn) {
+        HStack {
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 13))
+                Text(title).font(.system(size: 13)).lineLimit(1)
                 if let subtitle { Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary) }
             }
+            Spacer(minLength: 8)
+            Toggle(title, isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .tint(Theme.ink)
         }
-        .toggleStyle(.switch)
-        .controlSize(.small)
-        .tint(Theme.ink)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
     }

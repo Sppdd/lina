@@ -26,6 +26,16 @@
     "swift-dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/SelfTest.swiftdeps",
     "swiftmodule" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/SelfTest~partial.swiftmodule"
   },
+  "/Users/etharo/Desktop/lina/Sources/Lina/App/Snapshots.swift" : {
+    "const-values" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Snapshots.swiftconstvalues",
+    "dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Snapshots.d",
+    "diagnostics" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Snapshots.dia",
+    "index-unit-output-path" : "/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Snapshots.o",
+    "llvm-bc" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Snapshots.bc",
+    "object" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Snapshots.o",
+    "swift-dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Snapshots.swiftdeps",
+    "swiftmodule" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Snapshots~partial.swiftmodule"
+  },
   "/Users/etharo/Desktop/lina/Sources/Lina/Core/Accessibility.swift" : {
     "const-values" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Accessibility.swiftconstvalues",
     "dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Debug/Lina-p.build/Objects-normal/arm64/Accessibility.d",
