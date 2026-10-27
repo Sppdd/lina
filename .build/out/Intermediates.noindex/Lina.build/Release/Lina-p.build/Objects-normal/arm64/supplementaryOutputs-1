@@ -1,0 +1,11 @@
+{
+  "/Users/etharo/Desktop/lina/Sources/Lina/App/LinaApp.swift" : {
+    "abi-baseline-json" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Lina.abi.json",
+    "const-values" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Lina-primary.swiftconstvalues",
+    "dependencies" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Lina-primary.d",
+    "diagnostics" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Lina-primary.dia",
+    "swiftdoc" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Lina.swiftdoc",
+    "swiftmodule" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Lina.swiftmodule",
+    "swiftsourceinfo" : "/Users/etharo/Desktop/lina/.build/out/Intermediates.noindex/Lina.build/Release/Lina-p.build/Objects-normal/arm64/Lina.swiftsourceinfo"
+  }
+}

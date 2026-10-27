@@ -1,0 +1,10 @@
+Target dependency graph (4 targets)
+Target 'AllIncludingTests' in project 'Aggregate'
+➜ Explicit dependency on target 'LinaTests-product' in project 'Lina'
+➜ Dependency on target 'LinaTests-product' in project 'Lina' via transitive dependency through 'LinaTests-test-runner'
+➜ Explicit dependency on target 'Lina-product' in project 'Lina'
+Target 'LinaTests-product' in project 'Lina'
+➜ Explicit dependency on target 'Lina-product' in project 'Lina'
+➜ Explicit dependency on target 'Lina' in project 'Lina'
+Target 'Lina' in project 'Lina' (no dependencies)
+Target 'Lina-product' in project 'Lina' (no dependencies)
