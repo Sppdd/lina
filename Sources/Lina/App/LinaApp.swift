@@ -99,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Snapshots.runIfRequested(engine: engine)
+        LiveTest.runIfRequested(engine: engine)
         NSApp.setActivationPolicy(.accessory)
         if let icon = Bundle.main.image(forResource: "AppIcon") { NSApp.applicationIconImage = icon }
 

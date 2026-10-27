@@ -20,7 +20,8 @@ final class GhostEngine: ObservableObject {
     private let panel = GhostPanel()
     private let monitor = KeyMonitor()
 
-    private var suggestion = ""
+    private(set) var suggestion = ""
+    var isStreaming: Bool { panel.model.streaming }
     private var caret: CGRect = .zero
     private var debounce: DispatchWorkItem?
     private var task: Task<Void, Never>?
