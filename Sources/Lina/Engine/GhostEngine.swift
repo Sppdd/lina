@@ -14,6 +14,14 @@ final class GhostEngine: ObservableObject {
     @Published private(set) var status: Status = .listening
     @Published private(set) var currentApp: (name: String, bundleID: String) = ("", "")
     @Published private(set) var lastLatencyMs: Int?
+    /// Whether macOS currently lets Lina read other apps. Re-checked on a timer, so the UI follows
+    /// the switch in System Settings without a relaunch.
+    @Published private(set) var isTrusted = AX.isTrusted
+
+    /// Every keystroke the writer makes in another app (not Lina's own windows).
+    var onTyped: (() -> Void)?
+    /// The writer switched to another app.
+    var onAppChanged: (() -> Void)?
 
     private let settings = AppSettings.shared
     private let stats = WritingStats.shared
@@ -44,6 +52,7 @@ final class GhostEngine: ObservableObject {
                     if let app, app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
                         self?.currentApp = (app.localizedName ?? "", app.bundleIdentifier ?? "")
                         self?.refreshStatus()
+                        self?.onAppChanged?()
                     }
                     self?.reset()
                 }
@@ -65,8 +74,16 @@ final class GhostEngine: ObservableObject {
     }
 
     func refreshStatus() {
-        if !AX.isTrusted || !monitor.isRunning {
-            if AX.isTrusted { monitor.start() }
+        let trusted = AX.isTrusted
+        if trusted != isTrusted { isTrusted = trusted }
+        if !trusted {
+            // A tap made before access was revoked never works again; drop it so a fresh one is made later.
+            monitor.stop()
+            status = .needsPermission
+            return
+        }
+        if !monitor.isRunning {
+            monitor.start()
             if !monitor.isRunning { status = .needsPermission; return }
         }
         if !settings.isModelConfigured { status = .needsModel; return }
@@ -95,6 +112,9 @@ final class GhostEngine: ObservableObject {
         }
 
         if commandish { reset(); return false }
+        // Typing into Lina's own companion window isn't writing in the draft.
+        if NSApp.keyWindow?.frameAutosaveName == "LinaCompanion" { return false }
+        onTyped?()
 
         let typed = event.typedString
         countWords(typed, keyCode: code)

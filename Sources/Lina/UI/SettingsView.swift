@@ -25,7 +25,26 @@ private struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Suggest as I write", isOn: $settings.enabled)
+                Toggle("Think with me in a floating window", isOn: $settings.companionEnabled)
+                LabeledContent("Read again after a pause of") {
+                    HStack {
+                        Slider(value: $settings.companionPauseMs, in: 1000...8000, step: 250)
+                            .frame(width: 180)
+                        Text(String(format: "%.1f s", settings.companionPauseMs / 1000))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 64, alignment: .trailing)
+                    }
+                }
+            } header: {
+                Text("Companion")
+            } footer: {
+                Text("Lina reads the draft you're working on and tells you what it hears, why you might be writing it, and a question to take it further. It never types into your document.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Ghost text at the cursor", isOn: $settings.enabled)
                 Picker("Suggestion length", selection: $settings.length) {
                     ForEach(SuggestionLength.allCases) { Text($0.title).tag($0) }
                 }
@@ -40,12 +59,12 @@ private struct GeneralSettings: View {
                     }
                 }
             } footer: {
-                Text("Lina only speaks up when you pause after a word or a comma — never mid-word.")
+                Text("Optional autocomplete: a short continuation when you pause after a word or comma. Tab keeps it.")
                     .foregroundStyle(.secondary)
             }
 
             Section("Shortcuts") {
-                Picker("Ask Lina", selection: $settings.hotKey) {
+                Picker("Show or hide Lina", selection: $settings.hotKey) {
                     ForEach(PaletteHotKey.allCases) { Text($0.title).tag($0) }
                 }
                 .onChange(of: settings.hotKey) { _, k in HotKeyCenter.shared.register(k) }
@@ -62,13 +81,20 @@ private struct GeneralSettings: View {
                     get: { settings.launchAtLogin }, set: { settings.launchAtLogin = $0 }))
             }
 
-            Section("Accessibility") {
+            Section {
                 LabeledContent("Status") {
-                    if AX.isTrusted {
+                    if engine.isTrusted {
                         Label("Granted", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     } else {
-                        Button("Grant Access…") { AX.requestTrust(); AX.openAccessibilitySettings() }
+                        Button("Grant Access…") { AX.grantAccess() }
                     }
+                }
+            } header: {
+                Text("Accessibility")
+            } footer: {
+                if !engine.isTrusted {
+                    Text("Already switched on in System Settings? Click Grant Access: Lina clears the old entry left by an earlier build, so you can switch it on once more.")
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -104,14 +130,15 @@ struct ModelSettings: View {
                     SecureField("API key", text: $keyDraft, prompt: Text("Paste your Nebius API key"))
                         .onSubmit(saveKey)
                         .onChange(of: keyDraft) { _, _ in if testState != .testing { testState = .idle } }
-                    modelPicker(selection: $settings.nebiusModel)
+                    modelPicker("Companion", selection: $settings.companionModel)
+                    modelPicker("Ghost text", selection: $settings.nebiusModel)
                 } header: {
                     Text("Nebius Token Factory")
                 } footer: {
                     HStack {
                         Link("Get an API key →", destination: URL(string: "https://tokenfactory.nebius.com/")!)
                         Spacer()
-                        Text("Default: NVIDIA Nemotron 3 Nano — fast enough to keep up with your typing.")
+                        Text("Defaults: NVIDIA Nemotron 3 Super thinks with you; Nemotron 3 Nano keeps up with ghost text.")
                             .foregroundStyle(.secondary)
                     }
                     .font(.caption)
@@ -119,7 +146,7 @@ struct ModelSettings: View {
             } else {
                 Section {
                     TextField("Server", text: $settings.localBaseURL)
-                    modelPicker(selection: $settings.localModel)
+                    modelPicker("Model", selection: $settings.localModel)
                 } header: {
                     Text("Local server (OpenAI-compatible)")
                 } footer: {
@@ -151,12 +178,12 @@ struct ModelSettings: View {
     }
 
     @ViewBuilder
-    private func modelPicker(selection: Binding<String>) -> some View {
+    private func modelPicker(_ title: String, selection: Binding<String>) -> some View {
         HStack {
             if models.isEmpty {
-                TextField("Model", text: selection)
+                TextField(title, text: selection)
             } else {
-                Picker("Model", selection: selection) {
+                Picker(title, selection: selection) {
                     if !models.contains(selection.wrappedValue) { Text(selection.wrappedValue).tag(selection.wrappedValue) }
                     let nvidia = models.filter { $0.lowercased().contains("nvidia") || $0.lowercased().contains("nemotron") }
                     if !nvidia.isEmpty {

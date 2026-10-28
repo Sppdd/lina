@@ -16,7 +16,7 @@ enum Snapshots {
                 let v = OnboardingView(engine: engine, step: step)
                 render(v, size: CGSize(width: 680, height: 560), dark: dark, to: dir.appendingPathComponent("onboarding-\(step)\(suffix).png"))
             }
-            render(MenuBarView(engine: engine, palette: PaletteController()).background(VisualEffect(material: .menu)),
+            render(MenuBarView(engine: engine, palette: PaletteController(), companion: Companion()).background(VisualEffect(material: .menu)),
                    size: nil, dark: dark, to: dir.appendingPathComponent("menubar\(suffix).png"))
 
             let sample = SampleTarget()
@@ -29,6 +29,19 @@ enum Snapshots {
             let p3 = PaletteController()
             p3.preview(target: sample, action: .findWord, phase: .done, options: ["hushed", "still", "muted", "serene", "subdued", "tranquil"])
             render(palette(p3), size: nil, dark: dark, to: dir.appendingPathComponent("palette-words\(suffix).png"))
+
+            let companion = Companion()
+            companion.preview(place: "Notes · Letter to Dad", entries: [
+                .reflection(Reflection(
+                    hearing: "You're trying to reach your father, but the letter keeps turning into a report — the shop, Mom — instead of what you feel.",
+                    why: "Underneath the updates there's anger you haven't said out loud: he never let you help.",
+                    ask: "What did you want to carry for him that he wouldn't let you?",
+                    next: "Setting the table for four — stay with that small ritual and see what it holds.")),
+                .writer("I think I want to forgive him, but I'm not ready."),
+                .reply("Then maybe the letter doesn't need to forgive him yet. It can just tell him what it cost you — the forgiving can come later, in another letter."),
+            ])
+            render(CompanionView(companion: companion, input: CompanionInput()), size: CGSize(width: 340, height: 560),
+                   dark: dark, to: dir.appendingPathComponent("companion\(suffix).png"))
 
             let ghost = GhostModel(); ghost.text = " and only the drip from the awning echoed softly."; ghost.fontSize = 14
             render(GhostView(model: ghost), size: nil, dark: dark, to: dir.appendingPathComponent("ghost\(suffix).png"))

@@ -11,7 +11,7 @@ struct LinaApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(engine: delegate.engine, palette: delegate.palette)
+            MenuBarView(engine: delegate.engine, palette: delegate.palette, companion: delegate.companion)
         } label: {
             MenuBarLabel(engine: delegate.engine)
         }
@@ -95,6 +95,7 @@ struct MenuBarLabel: View {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let engine = GhostEngine()
     let palette = PaletteController()
+    let companion = Companion()
     private var permissionTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -104,10 +105,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let icon = Bundle.main.image(forResource: "AppIcon") { NSApp.applicationIconImage = icon }
 
         palette.deskTargetProvider = { DeskRegistry.shared.activeTarget }
-        HotKeyCenter.shared.handler = { [weak self] in self?.palette.toggle() }
+        HotKeyCenter.shared.handler = { [weak self] in self?.companion.toggle() }
         HotKeyCenter.shared.register(AppSettings.shared.hotKey)
 
+        engine.onTyped = { [weak self] in self?.companion.writerTyped() }
+        engine.onAppChanged = { [weak self] in self?.companion.focusChanged() }
         engine.start()
+        if AppSettings.shared.hasOnboarded && AppSettings.shared.companionEnabled { companion.show() }
         // Accessibility can be granted at any time; pick it up without a relaunch.
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.engine.refreshStatus() }

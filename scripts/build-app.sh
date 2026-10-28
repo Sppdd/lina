@@ -51,8 +51,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-echo "› Signing (ad-hoc)"
-codesign --force --deep --sign - "$APP" >/dev/null
+# Ad-hoc signatures change with every build, and macOS ties the Accessibility switch to the signature,
+# so a rebuilt Lina would show as allowed but be refused. Pin the requirement to the bundle ID instead,
+# so the permission you granted survives rebuilds.
+echo "› Signing (ad-hoc, stable requirement)"
+codesign --force --deep --sign - --identifier app.lina.mac \
+  --requirements '=designated => identifier "app.lina.mac"' "$APP" >/dev/null
 echo "✓ Built $APP"
 
 if [[ "${1:-}" == "--open" ]]; then open "$APP"; fi

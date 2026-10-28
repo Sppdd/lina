@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var engine: GhostEngine
     @ObservedObject var palette: PaletteController
+    @ObservedObject var companion: Companion
     @ObservedObject var settings = AppSettings.shared
     @ObservedObject var stats = WritingStats.shared
 
@@ -20,7 +21,9 @@ struct MenuBarView: View {
             todayCard
 
             VStack(spacing: 0) {
-                ToggleRow(title: "Suggestions", subtitle: "Ghost text when you pause", isOn: $settings.enabled)
+                ToggleRow(title: "Think with me", subtitle: "A floating window that reads along", isOn: $settings.companionEnabled)
+                Divider().padding(.leading, 12)
+                ToggleRow(title: "Ghost text", subtitle: "Optional autocomplete at the cursor", isOn: $settings.enabled)
                 if !engine.currentApp.bundleID.isEmpty {
                     Divider().padding(.leading, 12)
                     ToggleRow(title: "Pause in \(engine.currentApp.name)", subtitle: nil, isOn: Binding(
@@ -34,7 +37,12 @@ struct MenuBarView: View {
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.primary.opacity(0.04)))
 
             VStack(spacing: 2) {
-                MenuRow(title: "Ask Lina…", symbol: "pencil.and.scribble", shortcut: settings.hotKey.title) {
+                MenuRow(title: companion.isVisible ? "Hide Lina" : "Show Lina", symbol: "text.bubble",
+                        shortcut: settings.hotKey.title) {
+                    closeMenu()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { companion.toggle() }
+                }
+                MenuRow(title: "Rewrite with Lina…", symbol: "pencil.and.scribble", shortcut: nil) {
                     closeMenu()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { palette.open() }
                 }
@@ -65,7 +73,7 @@ struct MenuBarView: View {
             Callout(symbol: "hand.raised.fill", tint: .orange,
                     title: "Lina needs Accessibility access",
                     message: "So it can read the text field you're writing in and show suggestions at your cursor.",
-                    action: ("Grant Access", { AX.requestTrust(); AX.openAccessibilitySettings() }))
+                    action: ("Grant Access", { AX.grantAccess() }))
         case .needsModel:
             Callout(symbol: "key.fill", tint: Theme.ink,
                     title: "Connect a model",

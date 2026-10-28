@@ -49,6 +49,21 @@ enum AX {
         _ = AXIsProcessTrustedWithOptions(opts)
     }
 
+    /// Asks for access in a way that also repairs a stale entry. Each rebuild of an ad-hoc-signed app
+    /// changes its signature, so System Settings can show Lina switched on while macOS still says no.
+    /// Clearing Lina's entry first makes the next request add a fresh one that matches this build.
+    static func grantAccess() {
+        if !isTrusted, let id = Bundle.main.bundleIdentifier {
+            let reset = Process()
+            reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+            reset.arguments = ["reset", "Accessibility", id]
+            try? reset.run()
+            reset.waitUntilExit()
+        }
+        requestTrust()
+        openAccessibilitySettings()
+    }
+
     static func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)

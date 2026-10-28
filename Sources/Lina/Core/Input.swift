@@ -77,7 +77,13 @@ final class KeyMonitor {
 
     @discardableResult
     func start() -> Bool {
-        if tap != nil { return true }
+        if let tap {
+            if CGEvent.tapIsEnabled(tap: tap) { return true }
+            // macOS disables a tap when access is revoked, and it stays dead after access comes back.
+            CGEvent.tapEnable(tap: tap, enable: true)
+            if CGEvent.tapIsEnabled(tap: tap) { return true }
+            stop()
+        }
         let mask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.leftMouseDown.rawValue)
             | (1 << CGEventType.rightMouseDown.rawValue)

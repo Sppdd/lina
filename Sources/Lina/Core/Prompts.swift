@@ -265,7 +265,7 @@ struct Reflection: Equatable {
         var current: WritableKeyPath<Reflection, String>?
         for line in raw.components(separatedBy: .newlines) {
             var l = line.trimmingCharacters(in: .whitespaces)
-            while let f = l.first, "*#-_".contains(f) { l.removeFirst() }
+            while let f = l.first, "*#-_• ".contains(f) { l.removeFirst() }
             let upper = l.uppercased()
             let tags: [(String, WritableKeyPath<Reflection, String>)] =
                 [("HEARING", \.hearing), ("WHY", \.why), ("ASK", \.ask), ("NEXT", \.next)]

@@ -78,7 +78,7 @@ struct OnboardingView: View {
             VStack(spacing: 10) {
                 Text("Write with someone beside you.")
                     .font(Theme.serif(30, weight: .semibold))
-                Text("Lina reads along in any app and, when you pause, offers what might come next — in faint ink, right at your cursor.")
+                Text("Lina reads along in any app and, when you pause, thinks with you in a small floating window — what you're saying, why you're saying it, and where it could go.")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -101,7 +101,7 @@ struct OnboardingView: View {
                         .foregroundStyle(.green)
                         .transition(.scale.combined(with: .opacity))
                 } else {
-                    Button("Open System Settings") { AX.requestTrust(); AX.openAccessibilitySettings() }
+                    Button("Open System Settings") { AX.grantAccess() }
                         .buttonStyle(InkButtonStyle())
                     Text("Turn on **Lina** under Privacy & Security → Accessibility. This page updates on its own.")
                         .font(.system(size: 12))
@@ -167,13 +167,12 @@ struct OnboardingView: View {
 
     private var ready: some View {
         StepLayout(symbol: "checkmark.seal", title: "You're ready.",
-                   message: "Open any app — Notes, Mail, Journal, a browser — and start writing. Lina will be there when you pause.") {
+                   message: "Open any app — Notes, Mail, Journal, a browser — and start writing. Lina's window will think with you when you pause.") {
             VStack(spacing: 16) {
                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                    ShortcutRow(keys: ["tab"], text: "Keep the suggestion")
-                    ShortcutRow(keys: ["⌥", "tab"], text: "Keep just the next word")
-                    ShortcutRow(keys: ["esc"], text: "Dismiss — or simply keep typing")
-                    ShortcutRow(keys: settings.hotKey.title.components(separatedBy: " "), text: "Ask Lina: find the word, fix, feel, get unstuck")
+                    ShortcutRow(keys: settings.hotKey.title.components(separatedBy: " "), text: "Show Lina and talk back")
+                    ShortcutRow(keys: ["↩"], text: "Send your answer to Lina's question")
+                    ShortcutRow(keys: ["✦"], text: "Ask Lina to read your draft again now")
                 }
                 .padding(18)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.04)))
