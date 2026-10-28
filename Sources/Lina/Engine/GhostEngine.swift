@@ -24,6 +24,8 @@ final class GhostEngine: ObservableObject {
     var onAppChanged: (() -> Void)?
     /// A click anywhere.
     var onMouseDown: (() -> Void)?
+    /// Modifier keys changed (hold ⌃⌥ to talk).
+    var onModifiers: ((CGEventFlags) -> Void)?
     /// Sees every key first; returns true to swallow it (the companion popup's ⇥ and esc).
     var interceptKey: ((CGEvent) -> Bool)?
 
@@ -45,6 +47,9 @@ final class GhostEngine: ObservableObject {
     init() {
         monitor.onKeyDown = { [weak self] event in
             MainActor.assumeIsolated { self?.handleKey(event) ?? false }
+        }
+        monitor.onFlagsChanged = { [weak self] flags in
+            MainActor.assumeIsolated { self?.onModifiers?(flags) }
         }
         monitor.onMouseDown = { [weak self] in
             MainActor.assumeIsolated {

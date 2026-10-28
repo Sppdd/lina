@@ -49,6 +49,13 @@ enum Snapshots {
             render(CompanionView(companion: editing, input: CompanionInput()), size: nil,
                    dark: dark, to: dir.appendingPathComponent("companion-edit\(suffix).png"))
 
+            for (name, state, bubble) in [("ink", InkState.resting, "hi, i'm lina"), ("ink-thinking", .thinking, ""),
+                                          ("ink-listening", .listening, "")] {
+                let ink = InkModel(); ink.state = state; ink.bubble = bubble; ink.audioLevel = 0.12
+                render(InkBuddyView(model: ink).background(Theme.paper), size: InkBuddy.size, dark: dark,
+                       to: dir.appendingPathComponent("\(name)\(suffix).png"))
+            }
+
             let ghost = GhostModel(); ghost.text = " and only the drip from the awning echoed softly."; ghost.fontSize = 14
             render(GhostView(model: ghost), size: nil, dark: dark, to: dir.appendingPathComponent("ghost\(suffix).png"))
 

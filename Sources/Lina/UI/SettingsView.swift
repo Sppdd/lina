@@ -68,12 +68,27 @@ private struct GeneralSettings: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section {
+                Toggle("Show Lina's ink drop beside the cursor", isOn: $settings.inkEnabled)
+                Toggle("Hold ⌃⌥ to talk to Lina", isOn: $settings.talkEnabled)
+                    .disabled(!VoiceInput.isAvailable)
+                Toggle("Read Lina's questions aloud", isOn: $settings.speakAloud)
+            } header: {
+                Text("Presence")
+            } footer: {
+                Text(VoiceInput.isAvailable
+                     ? "The drop breathes beside your cursor, swirls while Lina thinks, and points at the words worth following. Hold ⌃⌥ and speak to answer Lina, or in Edit and Auto, to say how to rewrite the sentence. Speech is recognized on this Mac when your language supports it."
+                     : "The drop breathes beside your cursor, swirls while Lina thinks, and points at the words worth following. Talking needs the app bundle: build it with scripts/build-app.sh.")
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Shortcuts") {
                 Picker("Show or hide Lina", selection: $settings.hotKey) {
                     ForEach(PaletteHotKey.allCases) { Text($0.title).tag($0) }
                 }
                 .onChange(of: settings.hotKey) { _, k in HotKeyCenter.shared.register(k) }
                 LabeledContent("Switch mode") { KeyCap(settings.hotKey.modeTitle, size: 12) }
+                LabeledContent("Talk to Lina (hold)") { KeyCap("⌃⌥", size: 12) }
                 LabeledContent("Use Lina's rewrite (Edit)") { KeyCap("tab", size: 12) }
                 LabeledContent("Keep suggestion") { KeyCap("tab", size: 12) }
                 LabeledContent("Keep one word") { HStack(spacing: 4) { KeyCap("⌥", size: 12); KeyCap("tab", size: 12) } }

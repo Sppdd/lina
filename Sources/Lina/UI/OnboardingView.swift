@@ -174,6 +174,7 @@ struct OnboardingView: View {
                     ShortcutRow(keys: ["↩"], text: "Send your answer to Lina's question")
                     ShortcutRow(keys: settings.hotKey.modeTitle.components(separatedBy: " "),
                                 text: "Switch mode: Understand, Edit, Auto")
+                    ShortcutRow(keys: ["⌃⌥"], text: "Hold and talk to Lina")
                     ShortcutRow(keys: ["✦"], text: "Ask Lina to read your draft again now")
                 }
                 .padding(18)

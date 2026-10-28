@@ -256,6 +256,8 @@ struct Reflection: Equatable {
     var ask = ""
     /// A thread in the draft worth following next.
     var next = ""
+    /// The writer's own words that thread lives in, copied from the draft, so Lina can point at them.
+    var quote = ""
 
     var isEmpty: Bool { hearing.isEmpty && why.isEmpty && ask.isEmpty && next.isEmpty }
 
@@ -268,7 +270,7 @@ struct Reflection: Equatable {
             while let f = l.first, "*#-_• ".contains(f) { l.removeFirst() }
             let upper = l.uppercased()
             let tags: [(String, WritableKeyPath<Reflection, String>)] =
-                [("HEARING", \.hearing), ("WHY", \.why), ("ASK", \.ask), ("NEXT", \.next)]
+                [("HEARING", \.hearing), ("WHY", \.why), ("ASK", \.ask), ("NEXT", \.next), ("QUOTE", \.quote)]
             if let (tag, path) = tags.first(where: { upper.hasPrefix($0.0) }) {
                 var rest = l.dropFirst(tag.count)
                 while let f = rest.first, ":*_ ".contains(f) { rest.removeFirst() }
@@ -278,6 +280,7 @@ struct Reflection: Equatable {
                 r[keyPath: path] += (r[keyPath: path].isEmpty ? "" : " ") + l
             }
         }
+        r.quote = r.quote.trimmingCharacters(in: CharacterSet(charactersIn: "\"“”'‘’ "))
         return r
     }
 }
@@ -299,6 +302,7 @@ extension Prompts {
         WHY: why they seem to be writing this — the reason, need or feeling underneath
         ASK: one specific question that would help them go deeper or say it truer
         NEXT: one thread already in the draft that is worth following next
+        QUOTE: 2 to 8 words copied exactly from the draft where that thread is
         """
         var user = ""
         if !appName.isEmpty { user += "Writing in: \(appName)\(title.isEmpty ? "" : " — \(title)")\n" }
@@ -410,7 +414,8 @@ enum WordCount {
 
 extension Prompts {
     /// Edit and Auto modes: rewrite the one sentence the writer just finished.
-    static func rewriteSentence(_ sentence: String, before: String, voice: VoicePreset, aboutMe: String) -> [ChatMessage] {
+    static func rewriteSentence(_ sentence: String, before: String, instruction: String? = nil,
+                                voice: VoicePreset, aboutMe: String) -> [ChatMessage] {
         let sys = persona(voice, aboutMe: aboutMe) + """
 
         Task: rewrite one sentence the writer just wrote so it reads better. Fix grammar, spelling and \
@@ -422,6 +427,9 @@ extension Prompts {
         let context = before.suffix(1500).trimmingCharacters(in: .whitespacesAndNewlines)
         if !context.isEmpty { user += "What comes before it:\n<context>\n\(context)</context>\n" }
         user += "<sentence>\(sentence)</sentence>"
+        if let instruction, !instruction.isEmpty {
+            user += "\nThe writer asked for this change, follow it: \(instruction)"
+        }
         return [.system(sys), .user(user)]
     }
 }

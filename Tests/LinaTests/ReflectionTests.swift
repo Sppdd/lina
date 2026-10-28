@@ -8,11 +8,13 @@ final class ReflectionTests: XCTestCase {
         WHY: You never said goodbye.
         ASK: What would you say now?
         NEXT: The empty chair.
+        QUOTE: "the empty chair at dinner"
         """)
         XCTAssertEqual(r.hearing, "You miss him.")
         XCTAssertEqual(r.why, "You never said goodbye.")
         XCTAssertEqual(r.ask, "What would you say now?")
         XCTAssertEqual(r.next, "The empty chair.")
+        XCTAssertEqual(r.quote, "the empty chair at dinner")
     }
 
     func testToleratesMarkdownAndWrappedLines() {

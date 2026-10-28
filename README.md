@@ -50,6 +50,8 @@ Writing is how people think through the things that matter to them: a journal en
 |---|---|
 | **Companion (`⌥ Space`)** | A popup just above your cursor in any app. When you pause, Lina reads the whole draft and says what it hears, why you might be writing it, a question for you and a thread to follow. Reply in the popup to talk it through. `✦` reads again now. It steps aside as soon as you type, click elsewhere or press `esc`. |
 | **Modes (`⇧⌥ Space`)** | Cycle like Claude Code's modes. **Understand** reads along and asks questions, and never edits. **Edit** offers a rewrite of each sentence you finish; `⇥` takes it, `esc` keeps yours. **Auto** rewrites each sentence you finish in place, and `⌘Z` undoes it. In Edit or Auto, `⌥ Space` rewrites the sentence at the cursor right away, even an unfinished one. |
+| **Ink drop** | A drop of Lina's ink rides just above your text cursor in any app. It breathes while it rests, swirls while Lina thinks and becomes a waveform while it listens. When Lina finds a thread worth following, the drop flies to those words in your draft and underlines them. **Show me where** in the popup does it again. |
+| **Hold `⌃⌥` to talk** | Speak instead of typing. In Understand you answer Lina's question; in Edit and Auto you say how to rewrite the sentence at your cursor ("make it warmer"). Speech is recognized on your Mac when your language supports it. Lina can also read its questions aloud (off by default). |
 | **Ghost text** *(optional)* | A context-aware continuation appears at the caret in any app after a natural pause, never mid-word. `⇥` keeps it, `⌥⇥` keeps one word, `esc` or typing dismisses it. |
 | **Rewrite palette** | A Spotlight-style palette with **Keep going**, **Find the word**, **Fix grammar**, **Say it clearer**, **Give it feeling**, **Tighten**, **I'm stuck**, **Look it up**, or any instruction you type. `↩` replaces, `⌘↩` inserts after. |
 | **The Desk** | A calm serif writing space with inline ghost text, typewriter scrolling and a focus mode. Pages are plain Markdown files. |
@@ -136,6 +138,10 @@ Sources/Lina
 - **Reading.** `AXUIElement` provides the focused field's text, selection and caret bounds. Lina skips secure fields, secure input and apps you've turned it off for.
 - **Timing.** A `CGEventTap` watches keystrokes and swallows Tab and Esc **only** while a suggestion is on screen. Lina waits for your pause (550 ms by default) after a finished word or comma before it asks the model, and typing cancels any request in flight.
 - **Showing.** Click-through, non-activating `NSPanel`s follow the caret. Accepted text is typed in as keyboard events, so it lands in the host app's own undo stack. Palette rewrites are pasted in, and your clipboard is restored afterwards.
+
+## Inspired by Clicky
+
+The ink drop, pointing and hold-to-talk are adapted from [Clicky](https://github.com/farzaa/clicky) (MIT), Farza's AI buddy that lives next to your mouse cursor. Lina's version follows the **text caret** instead of the mouse, points at **phrases in your draft** instead of buttons on screen, and keeps speech on your Mac with no screenshots or analytics. See [docs/research/clicky-synthesis.md](docs/research/clicky-synthesis.md) for what we took from it and why.
 
 ## Privacy
 

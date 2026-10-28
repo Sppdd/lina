@@ -73,6 +73,16 @@ final class Companion: ObservableObject {
     private var bag = Set<AnyCancellable>()
 
     lazy var panel = CompanionPanel(companion: self)
+    /// Lina's ink drop beside the caret.
+    let ink = InkBuddy()
+    private let voice = VoiceInput()
+    private let speaker = Speaker()
+    private var inkTimer: Timer?
+    private var inkFollow: DispatchWorkItem?
+    /// ⌃⌥ is down; Lina starts listening after a short hold so ⌃⌥-shortcuts don't trigger it.
+    private var talkHeld = false
+    private var talkPending: DispatchWorkItem?
+    @Published private(set) var listening = false
 
     init() {
         settings.$companionEnabled
@@ -96,6 +106,15 @@ final class Companion: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.dropProposal() }
             .store(in: &bag)
+        // The drop's mood follows what Lina is doing.
+        Publishers.CombineLatest3($state, $proposal, $listening)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.syncInkState() }
+            .store(in: &bag)
+        voice.onLevel = { [weak self] level in self?.ink.model.audioLevel = level }
+        inkTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshInk() }
+        }
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -121,6 +140,10 @@ final class Companion: ObservableObject {
     /// ⇧ + the companion shortcut: Understand → Edit → Auto, like cycling modes in Claude Code.
     func cycleMode() {
         settings.companionMode = settings.companionMode.next
+        if ink.isVisible && !panel.isVisible {
+            ink.say(Self.modeNote(settings.companionMode))
+            return
+        }
         let wasVisible = panel.isVisible
         announcingMode = true
         present()
@@ -135,8 +158,17 @@ final class Companion: ObservableObject {
         }
     }
 
+    private static func modeNote(_ mode: CompanionMode) -> String {
+        switch mode {
+        case .understand: "understand · I'll read along"
+        case .edit: "edit · ⇥ takes my rewrite"
+        case .auto: "auto · I'll polish as you go"
+        }
+    }
+
     /// Hide the popup; the writer keeps going.
     func dismiss() {
+        ink.cancelPointing()
         dropProposal()
         announcingMode = false
         panel.hide()
@@ -162,6 +194,8 @@ final class Companion: ObservableObject {
     func writerTyped() {
         guard settings.companionEnabled, !panel.isKey else { return }
         lastTyped = Date()
+        ink.cancelPointing()
+        followCaretSoon()
         // Get out of the way while they write; Lina speaks again at the next pause.
         // (An offered rewrite no longer matches the draft once they type, so it goes too.)
         dropProposal()
@@ -174,17 +208,23 @@ final class Companion: ObservableObject {
     func focusChanged() {
         guard settings.companionEnabled else { return }
         if !panel.isKey { dismiss() }
+        ink.hide()
+        followCaretSoon()
         schedule(after: 900)
     }
 
     /// A click anywhere. Clicking outside the popup moves the cursor, so the popup goes away.
     func mouseDown() {
+        ink.cancelPointing()
+        followCaretSoon()
         guard panel.isVisible, !panel.frame.contains(NSEvent.mouseLocation) else { return }
         dismiss()
     }
 
     /// Keys the writer presses in any app while the popup is up. Returns true to swallow the key.
     func handleKey(_ event: CGEvent) -> Bool {
+        // A key while ⌃⌥ is held is a shortcut, not talking.
+        if talkHeld { cancelTalking() }
         guard panel.isVisible else { return false }
         let mods = event.flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskShift])
         guard mods.isEmpty else { return false }
@@ -287,6 +327,16 @@ final class Companion: ObservableObject {
             } else {
                 self.unseen = true
             }
+        }, onDone: { [weak self] kind in
+            guard let self, case let .reflection(r) = kind else { return }
+            if self.settings.speakAloud { self.speaker.say(r.ask) }
+            // Like Clicky pointing at a button: show the writer where the thread lives in their own words.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, Date().timeIntervalSince(self.lastTyped) > 1.5 else { return }
+                    self.showThread(r.quote)
+                }
+            }
         }) { raw in .reflection(Reflection.parse(raw)) }
     }
 
@@ -294,7 +344,7 @@ final class Companion: ObservableObject {
 
     /// Rewrites the sentence at the cursor. Returns false when there's no sentence to work on.
     @discardableResult
-    private func rewriteSentence(finishedOnly: Bool) -> Bool {
+    private func rewriteSentence(finishedOnly: Bool, instruction: String? = nil) -> Bool {
         guard settings.isModelConfigured,
               let snap = AX.snapshot(requireCaret: false), !settings.disabledApps.contains(snap.bundleID),
               snap.selection.length == 0,
@@ -314,7 +364,8 @@ final class Companion: ObservableObject {
         present(at: snap.caretRect)
 
         let before = snap.text.substring(to: found.range.location)
-        let messages = Prompts.rewriteSentence(found.text, before: before, voice: settings.voice, aboutMe: settings.aboutMe)
+        let messages = Prompts.rewriteSentence(found.text, before: before, instruction: instruction,
+                                               voice: settings.voice, aboutMe: settings.aboutMe)
         let client = LLMClient(endpoint: settings.endpoint)
         let auto = settings.companionMode == .auto
         rewriteTask = Task { [weak self] in
@@ -378,6 +429,138 @@ final class Companion: ObservableObject {
         if handledSentences.count > 40 { handledSentences.removeFirst() }
     }
 
+    // MARK: Ink
+
+    private func followCaretSoon() {
+        inkFollow?.cancel()
+        let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.refreshInk() } }
+        inkFollow = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
+    }
+
+    /// Keeps the drop beside the caret, and out of sight when there's nowhere to write.
+    private func refreshInk() {
+        guard settings.inkEnabled, settings.companionEnabled, settings.hasOnboarded else { ink.hide(); return }
+        if ink.isPointing { return }
+        // While the popup is up it's the one talking; the drop steps aside (unless it's listening).
+        if panel.isVisible && !listening { ink.hide(); return }
+        guard let caret = inkCaret() else { ink.hide(); return }
+        let appearing = !ink.isVisible
+        ink.follow(caret)
+        if appearing && !UserDefaults.standard.bool(forKey: "inkWelcomed") {
+            UserDefaults.standard.set(true, forKey: "inkWelcomed")
+            ink.say("hi, i'm lina", hold: 2.5)
+        }
+    }
+
+    private func inkCaret() -> CGRect? {
+        if DeskRegistry.shared.activeTarget != nil { return currentCaret() }
+        guard let found = AX.caret(), !settings.disabledApps.contains(found.bundleID) else { return nil }
+        return found.rect
+    }
+
+    private func syncInkState() {
+        guard !ink.isPointing else { return }
+        if listening { ink.model.state = .listening }
+        else if state == .thinking || proposal?.streaming == true { ink.model.state = .thinking }
+        else { ink.model.state = .resting }
+    }
+
+    private static let threadNotes = ["stay with this", "this thread", "there's more here", "follow this"]
+
+    /// Flies the drop to the words the reflection's thread lives in, and underlines them.
+    func showThread(_ quote: String) {
+        guard settings.inkEnabled, !quote.isEmpty, let caret = currentCaret(), let phrase = rectOfPhrase(quote) else { return }
+        ink.follow(caret)
+        ink.point(at: phrase, note: Self.threadNotes.randomElement() ?? "this thread")
+    }
+
+    /// Where the writer's own words sit on screen. Falls back to the quote's first words if the model
+    /// changed the ending a little.
+    private func rectOfPhrase(_ quote: String) -> CGRect? {
+        let words = quote.split(separator: " ")
+        let tries = [quote] + (words.count > 4 ? [words.prefix(4).joined(separator: " ")] : [])
+        let options: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        let rect: CGRect?
+        if DeskRegistry.shared.activeTarget != nil, let tv = DeskRegistry.shared.textView {
+            let text = tv.string as NSString
+            guard let range = tries.lazy.map({ text.range(of: $0, options: options) }).first(where: { $0.location != NSNotFound })
+            else { return nil }
+            rect = tv.firstRect(forCharacterRange: range, actualRange: nil)
+        } else {
+            guard let snap = AX.snapshot(requireCaret: false),
+                  let range = tries.lazy.map({ snap.text.range(of: $0, options: options) }).first(where: { $0.location != NSNotFound })
+            else { return nil }
+            rect = AX.screenRect(for: range, in: snap.element)
+        }
+        // Only point at words the writer can actually see.
+        guard let rect, rect.width > 1, NSScreen.screens.contains(where: { $0.visibleFrame.intersects(rect) }) else { return nil }
+        return rect
+    }
+
+    // MARK: Hold ⌃⌥ to talk
+
+    func modifiersChanged(_ flags: CGEventFlags) {
+        guard settings.talkEnabled, settings.companionEnabled, VoiceInput.isAvailable else { return }
+        let held = flags.intersection([.maskCommand, .maskShift, .maskControl, .maskAlternate]) == [.maskControl, .maskAlternate]
+        if held && !talkHeld {
+            talkHeld = true
+            let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.startTalking() } }
+            talkPending = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+        } else if !held && talkHeld {
+            talkHeld = false
+            talkPending?.cancel()
+            if listening { finishTalking() }
+        }
+    }
+
+    private func startTalking() {
+        guard talkHeld, !listening else { return }
+        speaker.stop()
+        ink.cancelPointing()
+        let caret = currentCaret()
+        listening = true
+        if !panel.isKey { panel.hide() }
+        if let caret, settings.inkEnabled { ink.follow(caret) }
+        Task { [weak self] in
+            guard let self else { return }
+            let started = await self.voice.start()
+            guard started else {
+                self.listening = false
+                self.ink.say("I need the microphone and speech recognition", hold: 3)
+                return
+            }
+            // Let go while macOS was asking for permission.
+            if !self.talkHeld { self.finishTalking() }
+        }
+    }
+
+    private func finishTalking() {
+        Task { [weak self] in
+            guard let self else { return }
+            let said = await self.voice.stop()
+            self.listening = false
+            guard !said.isEmpty else { self.ink.say("I didn't catch that"); return }
+            self.heard(said)
+        }
+    }
+
+    private func cancelTalking() {
+        talkHeld = false
+        talkPending?.cancel()
+        guard listening else { return }
+        voice.cancel()
+        listening = false
+    }
+
+    /// In Edit or Auto, what you say is how to rewrite the sentence at the cursor; otherwise it's your answer.
+    private func heard(_ said: String) {
+        if settings.companionMode != .understand, rewriteSentence(finishedOnly: false, instruction: said) { return }
+        present()
+        send(said)
+    }
+
     // MARK: Talking back
 
     func send(_ text: String) {
@@ -398,7 +581,10 @@ final class Companion: ObservableObject {
         let messages = Prompts.conversation(document: document, history: history,
                                             voice: settings.voice, aboutMe: settings.aboutMe)
         let id = append(.init(kind: .reply(""), streaming: true))
-        run(messages, maxTokens: 300, temperature: 0.7, into: id, onPiece: nil) { raw in .reply(raw.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        run(messages, maxTokens: 300, temperature: 0.7, into: id, onPiece: nil, onDone: { [weak self] kind in
+            guard let self, self.settings.speakAloud, case let .reply(text) = kind else { return }
+            self.speaker.say(text)
+        }) { raw in .reply(raw.trimmingCharacters(in: .whitespacesAndNewlines)) }
     }
 
     func clear() {
@@ -411,7 +597,8 @@ final class Companion: ObservableObject {
     // MARK: Model
 
     private func run(_ messages: [ChatMessage], maxTokens: Int, temperature: Double, into id: UUID,
-                     onPiece: (() -> Void)?, shape: @escaping (String) -> Entry.Kind) {
+                     onPiece: (() -> Void)?, onDone: ((Entry.Kind) -> Void)? = nil,
+                     shape: @escaping (String) -> Entry.Kind) {
         task?.cancel()
         generation += 1
         let gen = generation
@@ -430,6 +617,7 @@ final class Companion: ObservableObject {
                 self.update(id, kind: shape(raw), streaming: false)
                 if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { self.remove(id) }
                 self.state = .waiting
+                if !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { onDone?(shape(raw)) }
             } catch is CancellationError {
             } catch let e as URLError where e.code == .cancelled {
             } catch {
@@ -444,6 +632,8 @@ final class Companion: ObservableObject {
         debounce?.cancel()
         task?.cancel()
         dropProposal()
+        cancelTalking()
+        ink.hide()
         generation += 1
         entries.removeAll { $0.streaming }
         if state == .thinking { state = .waiting }

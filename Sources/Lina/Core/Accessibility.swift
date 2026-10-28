@@ -114,12 +114,40 @@ enum AX {
                              windowTitle: windowTitle, text: ns, selection: sel, caretRect: caret)
     }
 
+    /// Just the caret of the focused text field and which app it's in, without copying the whole text.
+    /// Cheap enough to call a few times a second for the ink drop.
+    static func caret() -> (rect: CGRect, bundleID: String)? {
+        guard isTrusted, !IsSecureEventInputEnabled(),
+              let app = NSWorkspace.shared.frontmostApplication,
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        else { return nil }
+        let appEl = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(appEl, 0.1)
+        guard let focused: AXUIElement = copy(appEl, kAXFocusedUIElementAttribute) else { return nil }
+        AXUIElementSetMessagingTimeout(focused, 0.1)
+        let subrole: String = copy(focused, kAXSubroleAttribute) ?? ""
+        guard subrole != (kAXSecureTextFieldSubrole as String),
+              let rangeValue: AXValue = copy(focused, kAXSelectedTextRangeAttribute)
+        else { return nil }
+        var cf = CFRange()
+        guard AXValueGetValue(rangeValue, .cfRange, &cf),
+              let rect = caretRect(focused, at: cf.location, textLength: Int.max)
+        else { return nil }
+        return (rect, app.bundleIdentifier ?? "")
+    }
+
     /// Selects a range in the given element (used before replacing a paragraph).
     @discardableResult
     static func select(_ range: NSRange, in element: AXUIElement) -> Bool {
         var cf = CFRange(location: range.location, length: range.length)
         guard let v = AXValueCreate(.cfRange, &cf) else { return false }
         return AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, v) == .success
+    }
+
+    /// Where a range of text sits on screen, in Cocoa coordinates. Used to point at the writer's words.
+    static func screenRect(for range: NSRange, in element: AXUIElement) -> CGRect? {
+        guard let ax = bounds(element, CFRange(location: range.location, length: range.length)) else { return nil }
+        return cocoa(ax)
     }
 
     // MARK: Internals
@@ -153,7 +181,11 @@ enum AX {
             axRect = CGRect(x: r.maxX, y: r.minY, width: 1, height: r.height)
         }
         guard let ax = axRect else { return nil }
-        // Accessibility uses top-left origin on the primary screen; Cocoa uses bottom-left.
+        return cocoa(ax)
+    }
+
+    /// Accessibility uses top-left origin on the primary screen; Cocoa uses bottom-left.
+    private static func cocoa(_ ax: CGRect) -> CGRect {
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         return CGRect(x: ax.minX, y: primaryHeight - ax.maxY, width: ax.width, height: ax.height)
     }

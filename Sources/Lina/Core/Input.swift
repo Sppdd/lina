@@ -69,6 +69,8 @@ final class KeyMonitor {
     /// Return true to consume the event.
     var onKeyDown: ((CGEvent) -> Bool)?
     var onMouseDown: (() -> Void)?
+    /// Modifier keys pressed or released on their own (for hold-to-talk).
+    var onFlagsChanged: ((CGEventFlags) -> Void)?
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
@@ -87,6 +89,7 @@ final class KeyMonitor {
         let mask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.leftMouseDown.rawValue)
             | (1 << CGEventType.rightMouseDown.rawValue)
+            | (1 << CGEventType.flagsChanged.rawValue)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
@@ -121,6 +124,8 @@ final class KeyMonitor {
             if onKeyDown?(event) == true { return nil }
         case .leftMouseDown, .rightMouseDown:
             onMouseDown?()
+        case .flagsChanged:
+            onFlagsChanged?(event.flags)
         default: break
         }
         return Unmanaged.passUnretained(event)

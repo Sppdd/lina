@@ -139,6 +139,12 @@ final class AppSettings: ObservableObject {
     /// The popup above the cursor that thinks with the writer about what they're writing and why.
     @Published var companionEnabled: Bool { didSet { d.set(companionEnabled, forKey: "companionEnabled") } }
     @Published var companionMode: CompanionMode { didSet { d.set(companionMode.rawValue, forKey: "companionMode") } }
+    /// Lina's ink drop riding beside the text cursor.
+    @Published var inkEnabled: Bool { didSet { d.set(inkEnabled, forKey: "inkEnabled") } }
+    /// Hold ⌃⌥ to talk to Lina.
+    @Published var talkEnabled: Bool { didSet { d.set(talkEnabled, forKey: "talkEnabled") } }
+    /// Read Lina's questions and replies aloud.
+    @Published var speakAloud: Bool { didSet { d.set(speakAloud, forKey: "speakAloud") } }
     @Published var companionModel: String { didSet { d.set(companionModel, forKey: "companionModel") } }
     /// How long a pause before the companion reads the draft again.
     @Published var companionPauseMs: Double { didSet { d.set(companionPauseMs, forKey: "companionPauseMs") } }
@@ -164,6 +170,9 @@ final class AppSettings: ObservableObject {
         d.register(defaults: [
             "enabled": false,
             "companionEnabled": true,
+            "inkEnabled": true,
+            "talkEnabled": true,
+            "speakAloud": false,
             "companionPauseMs": 2500.0,
             "debounceMs": 550.0,
             "dailyGoal": 500,
@@ -176,6 +185,9 @@ final class AppSettings: ObservableObject {
         enabled = d.bool(forKey: "enabled")
         companionEnabled = d.bool(forKey: "companionEnabled")
         companionMode = CompanionMode(rawValue: d.string(forKey: "companionMode") ?? "") ?? .understand
+        inkEnabled = d.bool(forKey: "inkEnabled")
+        talkEnabled = d.bool(forKey: "talkEnabled")
+        speakAloud = d.bool(forKey: "speakAloud")
         companionModel = d.string(forKey: "companionModel") ?? Provider.defaultCompanionModel
         companionPauseMs = d.double(forKey: "companionPauseMs")
         provider = Provider(rawValue: d.string(forKey: "provider") ?? "") ?? .nebius

@@ -251,7 +251,7 @@ struct CompanionView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(companion.entries) { entry in
-                        EntryView(entry: entry).id(entry.id)
+                        EntryView(entry: entry, showThread: { companion.showThread($0) }).id(entry.id)
                     }
                     if case let .error(message) = companion.state {
                         errorNote(message)
@@ -309,6 +309,7 @@ struct CompanionView: View {
 
 private struct EntryView: View {
     let entry: Companion.Entry
+    var showThread: (String) -> Void = { _ in }
 
     var body: some View {
         switch entry.kind {
@@ -360,6 +361,15 @@ private struct EntryView: View {
                 }
             }
             part("A thread to follow", r.next)
+            if !r.quote.isEmpty && !entry.streaming {
+                Button { showThread(r.quote) } label: {
+                    Label("Show me where", systemImage: "drop.fill")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.ink)
+                .help("Lina's ink points at “\(r.quote)” in your draft")
+            }
             if entry.streaming && r.next.isEmpty { InkDot().frame(width: 6, height: 6) }
         }
         .padding(14)

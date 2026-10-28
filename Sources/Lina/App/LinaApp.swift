@@ -112,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.onTyped = { [weak self] in self?.companion.writerTyped() }
         engine.onAppChanged = { [weak self] in self?.companion.focusChanged() }
         engine.onMouseDown = { [weak self] in self?.companion.mouseDown() }
+        engine.onModifiers = { [weak self] flags in self?.companion.modifiersChanged(flags) }
         engine.interceptKey = { [weak self] event in self?.companion.handleKey(event) ?? false }
         engine.start()
         if AppSettings.shared.hasOnboarded { companion.start() }
