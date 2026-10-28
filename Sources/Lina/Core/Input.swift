@@ -138,19 +138,38 @@ extension CGEvent {
     var keyCode: Int { Int(getIntegerValueField(.keyboardEventKeycode)) }
 }
 
-/// System-wide hotkey through Carbon — needs no extra permission.
+/// System-wide hotkeys through Carbon — need no extra permission.
 final class HotKeyCenter {
     static let shared = HotKeyCenter()
+    /// Shows or hides the companion.
     var handler: (() -> Void)?
-    private var ref: EventHotKeyRef?
+    /// Cycles the companion's mode (Understand → Edit → Auto).
+    var modeHandler: (() -> Void)?
+    private var refs: [EventHotKeyRef] = []
+    private var combos: [(code: Int, mods: Int)] = []
     private var installed = false
 
+    /// Whether a key event is one of Lina's own shortcuts, which isn't writing.
+    func matches(_ event: CGEvent) -> Bool {
+        let f = event.flags
+        let mods = (f.contains(.maskCommand) ? cmdKey : 0) | (f.contains(.maskShift) ? shiftKey : 0)
+            | (f.contains(.maskAlternate) ? optionKey : 0) | (f.contains(.maskControl) ? controlKey : 0)
+        return combos.contains { $0.code == event.keyCode && $0.mods == mods }
+    }
+
     func register(_ key: PaletteHotKey) {
-        if let ref { UnregisterEventHotKey(ref); self.ref = nil }
+        refs.forEach { UnregisterEventHotKey($0) }
+        refs.removeAll()
         if !installed {
             var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-            InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-                DispatchQueue.main.async { HotKeyCenter.shared.handler?() }
+            InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+                var hk = EventHotKeyID()
+                GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                                  nil, MemoryLayout<EventHotKeyID>.size, nil, &hk)
+                let id = hk.id
+                DispatchQueue.main.async {
+                    if id == 2 { HotKeyCenter.shared.modeHandler?() } else { HotKeyCenter.shared.handler?() }
+                }
                 return noErr
             }, 1, &spec, nil, nil)
             installed = true
@@ -160,7 +179,15 @@ final class HotKeyCenter {
         case .controlSpace: (kVK_Space, controlKey)
         case .commandShiftL: (kVK_ANSI_L, cmdKey | shiftKey)
         }
-        let id = EventHotKeyID(signature: OSType(0x4C494E41), id: 1)
-        RegisterEventHotKey(UInt32(code), UInt32(mods), id, GetApplicationEventTarget(), 0, &ref)
+        // Same keys plus ⇧ cycles the mode; ⇧⌘L already has ⇧, so it takes ⌥ as well.
+        let modeMods = key == .commandShiftL ? mods | optionKey : mods | shiftKey
+        combos = [(code, mods), (code, modeMods)]
+        for (id, m) in [(UInt32(1), mods), (UInt32(2), modeMods)] {
+            var ref: EventHotKeyRef?
+            let hk = EventHotKeyID(signature: OSType(0x4C494E41), id: id)
+            if RegisterEventHotKey(UInt32(code), UInt32(m), hk, GetApplicationEventTarget(), 0, &ref) == noErr, let ref {
+                refs.append(ref)
+            }
+        }
     }
 }

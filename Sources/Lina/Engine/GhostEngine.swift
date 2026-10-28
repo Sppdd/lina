@@ -22,6 +22,10 @@ final class GhostEngine: ObservableObject {
     var onTyped: (() -> Void)?
     /// The writer switched to another app.
     var onAppChanged: (() -> Void)?
+    /// A click anywhere.
+    var onMouseDown: (() -> Void)?
+    /// Sees every key first; returns true to swallow it (the companion popup's ⇥ and esc).
+    var interceptKey: ((CGEvent) -> Bool)?
 
     private let settings = AppSettings.shared
     private let stats = WritingStats.shared
@@ -43,7 +47,10 @@ final class GhostEngine: ObservableObject {
             MainActor.assumeIsolated { self?.handleKey(event) ?? false }
         }
         monitor.onMouseDown = { [weak self] in
-            MainActor.assumeIsolated { self?.reset() }
+            MainActor.assumeIsolated {
+                self?.reset()
+                self?.onMouseDown?()
+            }
         }
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
             .sink { [weak self] note in
@@ -100,6 +107,9 @@ final class GhostEngine: ObservableObject {
         let commandish = flags.contains(.maskCommand) || flags.contains(.maskControl)
         let visible = panel.isVisible && !suggestion.isEmpty
 
+        if HotKeyCenter.shared.matches(event) { return false }
+        if !visible, interceptKey?(event) == true { return true }
+
         if visible && !commandish && !flags.contains(.maskShift) {
             if code == kVK_Tab {
                 flags.contains(.maskAlternate) ? acceptWord() : acceptAll()
@@ -112,8 +122,8 @@ final class GhostEngine: ObservableObject {
         }
 
         if commandish { reset(); return false }
-        // Typing into Lina's own companion window isn't writing in the draft.
-        if NSApp.keyWindow?.frameAutosaveName == "LinaCompanion" { return false }
+        // Typing into Lina's own companion popup isn't writing in the draft.
+        if NSApp.keyWindow?.identifier == CompanionPanel.identifier { return false }
         onTyped?()
 
         let typed = event.typedString

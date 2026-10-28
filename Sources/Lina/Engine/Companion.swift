@@ -1,9 +1,13 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 
-/// Lina's main way of helping: a floating window that reads what you're writing, in any app,
-/// and thinks about it with you — what you seem to be saying, why, and where it could go.
-/// It never types into your document; you can talk back to it.
+/// Lina's main way of helping: a popup just above your cursor that reads what you're writing, in any app.
+/// What it does depends on the mode, cycled with ⇧ + the companion shortcut:
+/// - Understand thinks about it with you — what you seem to be saying, why, and where it could go —
+///   and never types into your document; you can talk back to it.
+/// - Edit offers a rewrite of each sentence you finish; ⇥ takes it, esc keeps yours.
+/// - Auto rewrites each sentence you finish in place; ⌘Z undoes it like any edit.
 @MainActor
 final class Companion: ObservableObject {
     enum State: Equatable { case waiting, reading, thinking, paused, error(String) }
@@ -29,6 +33,26 @@ final class Companion: ObservableObject {
     /// Where the draft Lina is reading lives, e.g. "Notes · Letter to Dad".
     @Published private(set) var place = ""
     @Published private(set) var wordCount = 0
+    /// Edit and Auto modes: Lina's rewrite of the sentence the writer just finished.
+    @Published private(set) var proposal: Proposal?
+    /// Briefly true after the mode changes, so the popup can say which mode Lina is in now.
+    @Published private(set) var announcingMode = false
+
+    struct Proposal: Equatable {
+        var original: String
+        var rewritten = ""
+        var streaming = true
+        /// Auto mode: already written into the draft.
+        var applied = false
+    }
+
+    /// Where a proposal goes back to, and the draft exactly as Lina read it.
+    private struct RewriteTarget {
+        let pid: pid_t
+        let text: NSString
+        let caret: Int
+        let found: Sentence.Found
+    }
 
     private let settings = AppSettings.shared
     private var debounce: DispatchWorkItem?
@@ -38,6 +62,14 @@ final class Companion: ObservableObject {
     private var document = ""
     private var documentKey = ""
     private var lastReflectedWords = 0
+    private var rewriteTarget: RewriteTarget?
+    private var rewriteTask: Task<Void, Never>?
+    /// Sentences already offered or written, so Lina doesn't rewrite its own rewrite.
+    private var handledSentences: [String] = []
+    private var lastTyped = Date.distantPast
+    /// A reflection arrived while the writer was typing; show it at the next pause.
+    private var unseen = false
+    private var announceToken = UUID()
     private var bag = Set<AnyCancellable>()
 
     lazy var panel = CompanionPanel(companion: self)
@@ -48,27 +80,80 @@ final class Companion: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] on in
                 guard let self else { return }
-                if on { self.show() } else { self.cancel(); self.panel.hide() }
+                if on { self.schedule(after: 300) } else { self.cancel(); self.panel.hide() }
             }
             .store(in: &bag)
-        // Appear as soon as the writer finishes onboarding.
+        // Start reading as soon as the writer finishes onboarding.
         settings.$hasOnboarded
             .dropFirst()
             .filter { $0 }
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in if self?.settings.companionEnabled == true { self?.show() } }
+            .sink { [weak self] _ in self?.start() }
+            .store(in: &bag)
+        settings.$companionMode
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.dropProposal() }
             .store(in: &bag)
     }
 
     var isVisible: Bool { panel.isVisible }
 
-    func show() {
-        panel.show()
-        if entries.isEmpty { schedule(after: 300) }
+    func start() {
+        if settings.companionEnabled { schedule(after: 300) }
     }
 
+    /// The companion shortcut: in Edit or Auto, rewrite the sentence at the cursor now;
+    /// otherwise open the popup above the cursor to talk with Lina.
     func toggle() {
-        if panel.isVisible { panel.hide() } else { show(); panel.focusInput() }
+        if panel.isVisible {
+            // Already showing a reflection: the shortcut moves into the reply field. Otherwise it closes.
+            if panel.isKey || proposal != nil || announcingMode { dismiss() } else { panel.focusInput() }
+            return
+        }
+        if settings.companionMode != .understand, rewriteSentence(finishedOnly: false) { return }
+        present()
+        panel.focusInput()
+        if entries.isEmpty { read(force: true) }
+    }
+
+    /// ⇧ + the companion shortcut: Understand → Edit → Auto, like cycling modes in Claude Code.
+    func cycleMode() {
+        settings.companionMode = settings.companionMode.next
+        let wasVisible = panel.isVisible
+        announcingMode = true
+        present()
+        let token = UUID()
+        announceToken = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.announceToken == token else { return }
+                self.announcingMode = false
+                if !wasVisible && !self.panel.isKey && self.proposal == nil { self.panel.hide() }
+            }
+        }
+    }
+
+    /// Hide the popup; the writer keeps going.
+    func dismiss() {
+        dropProposal()
+        announcingMode = false
+        panel.hide()
+    }
+
+    /// Shows the popup just above the writer's cursor.
+    private func present(at caret: CGRect? = nil) {
+        unseen = false
+        panel.show(above: caret ?? currentCaret())
+    }
+
+    private func currentCaret() -> CGRect? {
+        if DeskRegistry.shared.activeTarget != nil, let tv = DeskRegistry.shared.textView {
+            let r = tv.firstRect(forCharacterRange: tv.selectedRange(), actualRange: nil)
+            return r == .zero ? nil : r
+        }
+        return AX.snapshot(requireCaret: false)?.caretRect
     }
 
     // MARK: Watching
@@ -76,14 +161,47 @@ final class Companion: ObservableObject {
     /// Called for every keystroke the writer makes anywhere. Lina reads again once they pause.
     func writerTyped() {
         guard settings.companionEnabled, !panel.isKey else { return }
-        schedule()
+        lastTyped = Date()
+        // Get out of the way while they write; Lina speaks again at the next pause.
+        // (An offered rewrite no longer matches the draft once they type, so it goes too.)
+        dropProposal()
+        announcingMode = false
+        panel.hide()
+        schedule(after: settings.companionMode == .understand ? nil : Self.rewritePauseMs)
     }
 
     /// Called when the writer switches apps or windows.
     func focusChanged() {
         guard settings.companionEnabled else { return }
+        if !panel.isKey { dismiss() }
         schedule(after: 900)
     }
+
+    /// A click anywhere. Clicking outside the popup moves the cursor, so the popup goes away.
+    func mouseDown() {
+        guard panel.isVisible, !panel.frame.contains(NSEvent.mouseLocation) else { return }
+        dismiss()
+    }
+
+    /// Keys the writer presses in any app while the popup is up. Returns true to swallow the key.
+    func handleKey(_ event: CGEvent) -> Bool {
+        guard panel.isVisible else { return false }
+        let mods = event.flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskShift])
+        guard mods.isEmpty else { return false }
+        switch event.keyCode {
+        case kVK_Tab where proposal.map { !$0.streaming && !$0.applied && !$0.rewritten.isEmpty } ?? false:
+            acceptProposal()
+            return true
+        case kVK_Escape:
+            dismiss()
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// How long a pause after a finished sentence before Edit and Auto rewrite it.
+    static let rewritePauseMs = 1000.0
 
     private func schedule(after ms: Double? = nil) {
         debounce?.cancel()
@@ -102,6 +220,7 @@ final class Companion: ObservableObject {
         var focus: String
         var appName: String
         var title: String
+        var caret: CGRect?
         var key: String { "\(appName)|\(title)" }
     }
 
@@ -110,15 +229,20 @@ final class Companion: ObservableObject {
         if let desk = DeskRegistry.shared.activeTarget {
             let ctx = desk.context
             return Draft(text: ctx.before + ctx.after, focus: desk.focusText, appName: "Desk",
-                         title: DeskStore.shared.current?.title ?? "")
+                         title: DeskStore.shared.current?.title ?? "", caret: currentCaret())
         }
         guard let snap = AX.snapshot(requireCaret: false), !settings.disabledApps.contains(snap.bundleID) else { return nil }
-        return Draft(text: snap.text as String, focus: snap.paragraph, appName: snap.appName, title: snap.windowTitle)
+        return Draft(text: snap.text as String, focus: snap.paragraph, appName: snap.appName, title: snap.windowTitle,
+                     caret: snap.caretRect)
     }
 
     private func read(force: Bool) {
         guard settings.companionEnabled else { state = .paused; return }
         guard settings.isModelConfigured else { state = .error(LLMError.notConfigured.localizedDescription); return }
+        if settings.companionMode != .understand && !force {
+            rewriteSentence(finishedOnly: true)
+            return
+        }
         guard let draft = currentDraft() else {
             if state != .thinking { state = .waiting }
             return
@@ -129,6 +253,7 @@ final class Companion: ObservableObject {
         guard words >= 12, force || moved || abs(words - lastReflectedWords) >= 12 else {
             document = draft.text
             wordCount = words
+            if unseen && !panel.isVisible { present(at: draft.caret) }
             return
         }
         if moved {
@@ -151,7 +276,106 @@ final class Companion: ObservableObject {
                                           title: draft.title, voice: settings.voice, aboutMe: settings.aboutMe,
                                           earlier: earlier)
         let id = append(.init(kind: .reflection(Reflection()), streaming: true))
-        run(messages, maxTokens: 400, temperature: 0.6, into: id) { raw in .reflection(Reflection.parse(raw)) }
+        let caret = draft.caret
+        var shown = false
+        run(messages, maxTokens: 400, temperature: 0.6, into: id, onPiece: { [weak self] in
+            // Pop up above the cursor with the first words, unless the writer is already typing again.
+            guard let self, !shown else { return }
+            shown = true
+            if Date().timeIntervalSince(self.lastTyped) * 1000 >= self.settings.companionPauseMs * 0.8 {
+                self.present(at: caret)
+            } else {
+                self.unseen = true
+            }
+        }) { raw in .reflection(Reflection.parse(raw)) }
+    }
+
+    // MARK: Rewriting (Edit and Auto)
+
+    /// Rewrites the sentence at the cursor. Returns false when there's no sentence to work on.
+    @discardableResult
+    private func rewriteSentence(finishedOnly: Bool) -> Bool {
+        guard settings.isModelConfigured,
+              let snap = AX.snapshot(requireCaret: false), !settings.disabledApps.contains(snap.bundleID),
+              snap.selection.length == 0,
+              let found = Sentence.find(in: snap.text, caret: snap.selection.location, finishedOnly: finishedOnly)
+        else { return false }
+        // Don't go around again on a sentence Lina already offered or wrote — unless asked to.
+        if finishedOnly && handledSentences.contains(found.text) { return false }
+        // Only right after the writer finished it, not when they come back to a document later.
+        if finishedOnly && Date().timeIntervalSince(lastTyped) > 10 { return false }
+        remember(found.text)
+
+        rewriteTask?.cancel()
+        let target = RewriteTarget(pid: snap.pid, text: snap.text, caret: snap.selection.location, found: found)
+        rewriteTarget = target
+        proposal = Proposal(original: found.text)
+        announcingMode = false
+        present(at: snap.caretRect)
+
+        let before = snap.text.substring(to: found.range.location)
+        let messages = Prompts.rewriteSentence(found.text, before: before, voice: settings.voice, aboutMe: settings.aboutMe)
+        let client = LLMClient(endpoint: settings.endpoint)
+        let auto = settings.companionMode == .auto
+        rewriteTask = Task { [weak self] in
+            var raw = ""
+            do {
+                for try await piece in client.stream(messages, maxTokens: 200, temperature: 0.3) {
+                    guard let self, !Task.isCancelled, self.proposal?.original == found.text else { return }
+                    raw += piece
+                    self.proposal?.rewritten = Sentence.clean(raw, original: found.text)
+                }
+                guard let self, !Task.isCancelled, self.proposal?.original == found.text else { return }
+                let rewritten = Sentence.clean(raw, original: found.text)
+                // Nothing worth changing: stay quiet.
+                guard !rewritten.isEmpty, rewritten != found.text else { self.dismiss(); return }
+                self.remember(rewritten)
+                self.proposal?.rewritten = rewritten
+                self.proposal?.streaming = false
+                if auto { self.acceptProposal() }
+            } catch is CancellationError {
+            } catch let e as URLError where e.code == .cancelled {
+            } catch {
+                guard let self, self.proposal?.original == found.text else { return }
+                self.dropProposal()
+                self.state = .error(error.localizedDescription)
+                self.panel.hide()
+            }
+        }
+        return true
+    }
+
+    /// Writes the rewrite over the writer's sentence, if the draft is still exactly as Lina read it.
+    func acceptProposal() {
+        guard let p = proposal, !p.streaming, !p.applied, !p.rewritten.isEmpty, let t = rewriteTarget else { return }
+        guard let now = AX.snapshot(requireCaret: false), now.pid == t.pid, now.text.isEqual(to: t.text as String),
+              now.selection.location == t.caret
+        else { dismiss(); return }
+        AX.select(t.found.range, in: now.element)
+        TextInserter.paste(p.rewritten + t.found.trailing)
+        if settings.companionMode == .auto {
+            // Show what changed for a moment, then get out of the way.
+            proposal?.applied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, let shown = self.proposal, shown.applied, shown.original == p.original else { return }
+                    self.dismiss()
+                }
+            }
+        } else {
+            dismiss()
+        }
+    }
+
+    private func dropProposal() {
+        rewriteTask?.cancel()
+        proposal = nil
+        rewriteTarget = nil
+    }
+
+    private func remember(_ sentence: String) {
+        handledSentences.append(sentence)
+        if handledSentences.count > 40 { handledSentences.removeFirst() }
     }
 
     // MARK: Talking back
@@ -174,7 +398,7 @@ final class Companion: ObservableObject {
         let messages = Prompts.conversation(document: document, history: history,
                                             voice: settings.voice, aboutMe: settings.aboutMe)
         let id = append(.init(kind: .reply(""), streaming: true))
-        run(messages, maxTokens: 300, temperature: 0.7, into: id) { raw in .reply(raw.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        run(messages, maxTokens: 300, temperature: 0.7, into: id, onPiece: nil) { raw in .reply(raw.trimmingCharacters(in: .whitespacesAndNewlines)) }
     }
 
     func clear() {
@@ -187,7 +411,7 @@ final class Companion: ObservableObject {
     // MARK: Model
 
     private func run(_ messages: [ChatMessage], maxTokens: Int, temperature: Double, into id: UUID,
-                     shape: @escaping (String) -> Entry.Kind) {
+                     onPiece: (() -> Void)?, shape: @escaping (String) -> Entry.Kind) {
         task?.cancel()
         generation += 1
         let gen = generation
@@ -200,6 +424,7 @@ final class Companion: ObservableObject {
                     guard let self, gen == self.generation else { return }
                     raw += piece
                     self.update(id, kind: shape(raw), streaming: true)
+                    onPiece?()
                 }
                 guard let self, gen == self.generation else { return }
                 self.update(id, kind: shape(raw), streaming: false)
@@ -218,6 +443,7 @@ final class Companion: ObservableObject {
     private func cancel() {
         debounce?.cancel()
         task?.cancel()
+        dropProposal()
         generation += 1
         entries.removeAll { $0.streaming }
         if state == .thinking { state = .waiting }
@@ -240,9 +466,13 @@ final class Companion: ObservableObject {
         entries.removeAll { $0.id == id }
     }
 
-    /// Fills the window with sample content, for screenshots.
+    /// Fills the popup with sample content, for screenshots.
     func preview(place: String, entries kinds: [Entry.Kind]) {
         self.place = place
         entries = kinds.map { Entry(kind: $0) }
+    }
+
+    func preview(proposal: Proposal) {
+        self.proposal = proposal
     }
 }

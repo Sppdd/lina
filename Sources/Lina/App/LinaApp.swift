@@ -106,12 +106,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         palette.deskTargetProvider = { DeskRegistry.shared.activeTarget }
         HotKeyCenter.shared.handler = { [weak self] in self?.companion.toggle() }
+        HotKeyCenter.shared.modeHandler = { [weak self] in self?.companion.cycleMode() }
         HotKeyCenter.shared.register(AppSettings.shared.hotKey)
 
         engine.onTyped = { [weak self] in self?.companion.writerTyped() }
         engine.onAppChanged = { [weak self] in self?.companion.focusChanged() }
+        engine.onMouseDown = { [weak self] in self?.companion.mouseDown() }
+        engine.interceptKey = { [weak self] event in self?.companion.handleKey(event) ?? false }
         engine.start()
-        if AppSettings.shared.hasOnboarded && AppSettings.shared.companionEnabled { companion.show() }
+        if AppSettings.shared.hasOnboarded { companion.start() }
         // Accessibility can be granted at any time; pick it up without a relaunch.
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.engine.refreshStatus() }

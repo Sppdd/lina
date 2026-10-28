@@ -25,7 +25,12 @@ private struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Think with me in a floating window", isOn: $settings.companionEnabled)
+                Toggle("Think with me in a popup above the cursor", isOn: $settings.companionEnabled)
+                Picker("Mode", selection: $settings.companionMode) {
+                    ForEach(CompanionMode.allCases) { mode in
+                        Text("\(mode.title) — \(mode.blurb)").tag(mode)
+                    }
+                }
                 LabeledContent("Read again after a pause of") {
                     HStack {
                         Slider(value: $settings.companionPauseMs, in: 1000...8000, step: 250)
@@ -39,7 +44,7 @@ private struct GeneralSettings: View {
             } header: {
                 Text("Companion")
             } footer: {
-                Text("Lina reads the draft you're working on and tells you what it hears, why you might be writing it, and a question to take it further. It never types into your document.")
+                Text("Understand: Lina tells you what it hears, why you might be writing it, and a question to take it further. It never types into your document. Edit and Auto rewrite each sentence you finish: Edit asks first (⇥ takes it), Auto just does it (⌘Z undoes). \(settings.hotKey.modeTitle) cycles the modes.")
                     .foregroundStyle(.secondary)
             }
 
@@ -68,6 +73,8 @@ private struct GeneralSettings: View {
                     ForEach(PaletteHotKey.allCases) { Text($0.title).tag($0) }
                 }
                 .onChange(of: settings.hotKey) { _, k in HotKeyCenter.shared.register(k) }
+                LabeledContent("Switch mode") { KeyCap(settings.hotKey.modeTitle, size: 12) }
+                LabeledContent("Use Lina's rewrite (Edit)") { KeyCap("tab", size: 12) }
                 LabeledContent("Keep suggestion") { KeyCap("tab", size: 12) }
                 LabeledContent("Keep one word") { HStack(spacing: 4) { KeyCap("⌥", size: 12); KeyCap("tab", size: 12) } }
                 LabeledContent("Dismiss") { KeyCap("esc", size: 12) }

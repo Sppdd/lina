@@ -29,7 +29,7 @@
 
 Most AI writing tools write *for* you. Lina writes *with* you.
 
-Lina is a menu bar app that reads along in **any app**: Notes, Mail, Journal, Safari, Obsidian. When you pause, a small floating window thinks with you. It tells you what it hears you saying, why you seem to be writing it, one question that takes you deeper, and a thread worth following. **It never types into your document.** You answer its question in the window, and the conversation keeps going.
+Lina is a menu bar app that reads along in **any app**: Notes, Mail, Journal, Safari, Obsidian. When you pause, a small popup appears just above your cursor and thinks with you. It tells you what it hears you saying, why you seem to be writing it, one question that takes you deeper, and a thread worth following. In **Understand** mode **it never types into your document**: you answer its question in the popup, and the conversation keeps going. Switch to **Edit** or **Auto** mode (`⇧⌥ Space`) and Lina rewrites each sentence you finish instead.
 
 Under the hood, Lina runs **NVIDIA Nemotron on Nebius Token Factory**: Nemotron 3 Super for the companion, Nemotron 3 Nano for fast ghost text. It can also run fully on your own Mac with Ollama, LM Studio or llama.cpp, so nothing leaves your machine.
 
@@ -48,7 +48,8 @@ Writing is how people think through the things that matter to them: a journal en
 
 | Feature | |
 |---|---|
-| **Companion (`⌥ Space`)** | A floating window beside any app. When you pause, Lina reads the whole draft and says what it hears, why you might be writing it, a question for you and a thread to follow. Reply in the window to talk it through. `✦` reads again now. |
+| **Companion (`⌥ Space`)** | A popup just above your cursor in any app. When you pause, Lina reads the whole draft and says what it hears, why you might be writing it, a question for you and a thread to follow. Reply in the popup to talk it through. `✦` reads again now. It steps aside as soon as you type, click elsewhere or press `esc`. |
+| **Modes (`⇧⌥ Space`)** | Cycle like Claude Code's modes. **Understand** reads along and asks questions, and never edits. **Edit** offers a rewrite of each sentence you finish; `⇥` takes it, `esc` keeps yours. **Auto** rewrites each sentence you finish in place, and `⌘Z` undoes it. In Edit or Auto, `⌥ Space` rewrites the sentence at the cursor right away, even an unfinished one. |
 | **Ghost text** *(optional)* | A context-aware continuation appears at the caret in any app after a natural pause, never mid-word. `⇥` keeps it, `⌥⇥` keeps one word, `esc` or typing dismisses it. |
 | **Rewrite palette** | A Spotlight-style palette with **Keep going**, **Find the word**, **Fix grammar**, **Say it clearer**, **Give it feeling**, **Tighten**, **I'm stuck**, **Look it up**, or any instruction you type. `↩` replaces, `⌘↩` inserts after. |
 | **The Desk** | A calm serif writing space with inline ghost text, typewriter scrolling and a focus mode. Pages are plain Markdown files. |
@@ -128,7 +129,7 @@ Sources/Lina
 │             streaming OpenAI-compatible client, prompts, settings, keychain, stats
 ├── Engine/   Companion, GhostEngine, PaletteController, targets
 ├── Desk/     DeskTextView (inline ghost, typewriter, focus), page store
-├── UI/       Companion panel, ghost panel, palette, menu bar, settings, onboarding
+├── UI/       Companion popup, ghost panel, palette, menu bar, settings, onboarding
 └── Design/   Theme: ink, paper, New York serif, keycaps
 ```
 
@@ -139,7 +140,7 @@ Sources/Lina
 ## Privacy
 
 - Lina never reads password fields or secure input, and you can turn it off per app.
-- There's no account, telemetry or analytics. API keys are stored in the macOS Keychain.
+- There's no account, telemetry or analytics. Your API key is stored in `~/Library/Application Support/Lina/secrets.json`, which only your user account can read (mode 0600). Lina doesn't use the Keychain: an ad-hoc-signed build would set off a Keychain permission prompt after every rebuild.
 - Text goes only to the endpoint you choose. With **On this Mac**, nothing leaves your machine.
 
 ## Develop

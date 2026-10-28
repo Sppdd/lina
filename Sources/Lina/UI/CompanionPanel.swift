@@ -1,46 +1,92 @@
 import AppKit
 import SwiftUI
 
-/// A floating window that stays beside whatever you're writing in. It never takes focus from your
-/// document unless you click into it to talk back.
+/// A popup that sits just above the writer's cursor, so Lina's words are right where their eyes are.
+/// It never takes focus from the document unless they open it to talk back.
 @MainActor
 final class CompanionPanel {
+    static let identifier = NSUserInterfaceItemIdentifier("LinaCompanion")
+    static let width: CGFloat = 380
     private let panel: CompanionNSPanel
     private let input = CompanionInput()
+    /// The caret the popup points at, in Cocoa screen coordinates.
+    private var anchor: CGRect?
+    private var height: CGFloat = 120
 
     init(companion: Companion) {
-        panel = CompanionNSPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 540),
-                             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
-                             backing: .buffered, defer: true)
-        panel.titlebarAppearsTransparent = true
-        panel.titleVisibility = .hidden
-        panel.isMovableByWindowBackground = true
-        panel.isFloatingPanel = true
-        panel.level = .floating
+        panel = CompanionNSPanel(contentRect: NSRect(x: 0, y: 0, width: Self.width, height: height),
+                                 styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+                                 backing: .buffered, defer: true)
+        panel.identifier = Self.identifier
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .popUpMenu
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.minSize = NSSize(width: 280, height: 320)
-        panel.backgroundColor = Theme.nsPaper
-        for button in [NSWindow.ButtonType.miniaturizeButton, .zoomButton] {
-            panel.standardWindowButton(button)?.isHidden = true
-        }
-        panel.contentView = NSHostingView(rootView: CompanionView(companion: companion, input: input))
-        panel.setFrameAutosaveName("LinaCompanion")
-        if !panel.setFrameUsingName("LinaCompanion"), let screen = NSScreen.main?.visibleFrame {
-            panel.setFrameOrigin(NSPoint(x: screen.maxX - 340 - 20, y: screen.maxY - 540 - 20))
-        }
+        panel.animationBehavior = .none
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+        let host = NSHostingView(rootView: CompanionView(companion: companion, input: input) { [weak self] h in
+            self?.resize(to: h)
+        })
+        host.sizingOptions = []
+        panel.contentView = host
     }
 
     var isVisible: Bool { panel.isVisible }
     var isKey: Bool { panel.isKeyWindow }
+    var frame: CGRect { panel.frame }
 
-    func show() { panel.orderFrontRegardless() }
-    func hide() { panel.orderOut(nil) }
+    /// Shows the popup above the caret. Without one (some apps don't report it), it stays where it was,
+    /// or goes to the top right of the screen.
+    func show(above caret: CGRect?) {
+        if let caret { anchor = caret }
+        place()
+        if !panel.isVisible {
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.12
+                panel.animator().alphaValue = 1
+            }
+        }
+    }
+
+    func hide() {
+        guard panel.isVisible else { return }
+        panel.orderOut(nil)
+    }
 
     func focusInput() {
         panel.makeKey()
         input.focus += 1
+    }
+
+    private func resize(to h: CGFloat) {
+        let h = ceil(h)
+        guard h > 0, abs(height - h) > 0.5 else { return }
+        height = h
+        if panel.isVisible { place() }
+    }
+
+    private func place() {
+        let size = CGSize(width: Self.width, height: height)
+        let frame: CGRect
+        if let caret = anchor {
+            let screen = NSScreen.screens.first { $0.frame.intersects(caret) } ?? NSScreen.main
+            let vf = screen?.visibleFrame ?? .infinite
+            let x = max(vf.minX + 8, min(caret.minX - 18, vf.maxX - size.width - 8))
+            // Above the line being written; below it when there's no room at the top of the screen.
+            var y = caret.maxY + 6
+            if y + size.height > vf.maxY - 4 { y = max(vf.minY + 4, caret.minY - size.height - 6) }
+            frame = CGRect(origin: CGPoint(x: x, y: y), size: size)
+        } else {
+            let vf = NSScreen.main?.visibleFrame ?? .zero
+            frame = CGRect(x: vf.maxX - size.width - 20, y: vf.maxY - size.height - 20,
+                           width: size.width, height: size.height)
+        }
+        panel.setFrame(frame, display: true)
+        panel.invalidateShadow()
     }
 }
 
@@ -58,51 +104,73 @@ final class CompanionInput: ObservableObject {
 struct CompanionView: View {
     @ObservedObject var companion: Companion
     @ObservedObject var input: CompanionInput
+    var onHeight: (CGFloat) -> Void = { _ in }
     @ObservedObject var settings = AppSettings.shared
     @State private var draft = ""
+    @State private var trailHeight: CGFloat = 0
     @FocusState private var typing: Bool
+
+    private static let maxTrailHeight: CGFloat = 300
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider().opacity(0.5)
-            if companion.entries.isEmpty {
+            if companion.announcingMode {
+                modeNote
+            } else if let proposal = companion.proposal {
+                ProposalView(proposal: proposal, accept: { companion.acceptProposal() },
+                             dismiss: { companion.dismiss() })
+            } else if companion.entries.isEmpty {
                 emptyState
             } else {
                 trail
             }
-            Divider().opacity(0.5)
-            replyBar
+            if companion.proposal == nil && !companion.announcingMode {
+                Divider().opacity(0.5)
+                replyBar
+            }
         }
-        .background(Theme.paper)
+        .frame(width: CompanionPanel.width)
+        .background(VisualEffect(material: .popover))
+        .background(Theme.paper.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.1), lineWidth: 0.5))
         .tint(Theme.ink)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(GeometryReader { g in Color.clear.preference(key: PopupHeightKey.self, value: g.size.height) })
+        .onPreferenceChange(PopupHeightKey.self) { onHeight($0) }
+        .frame(maxHeight: .infinity, alignment: .top)
         .onChange(of: input.focus) { _, _ in typing = true }
+        .onExitCommand { companion.dismiss() }
     }
 
     // MARK: Header
 
     private var header: some View {
         HStack(spacing: 8) {
-            Wordmark(size: 17)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("thinking with you")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                if !companion.place.isEmpty {
-                    Text(companion.place)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+            Wordmark(size: 14)
+            modeChip
+            if !companion.place.isEmpty {
+                Text(companion.place)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
-            Spacer()
+            Spacer(minLength: 4)
             stateDot
-            Button { companion.thinkNow() } label: { Image(systemName: "sparkles") }
-                .buttonStyle(.borderless)
-                .help("Read my draft again now")
-                .disabled(companion.state == .thinking)
+            if settings.companionMode == .understand {
+                Button { companion.thinkNow() } label: { Image(systemName: "sparkles") }
+                    .buttonStyle(.borderless)
+                    .help("Read my draft again now")
+                    .disabled(companion.state == .thinking)
+            }
             Menu {
+                Picker("Mode", selection: $settings.companionMode) {
+                    ForEach(CompanionMode.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                }
+                Divider()
                 Button("Clear the conversation") { companion.clear() }
                 Button(settings.companionEnabled ? "Pause reading" : "Resume reading") {
                     settings.companionEnabled.toggle()
@@ -112,10 +180,25 @@ struct CompanionView: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
         }
-        .padding(.leading, 44) // clear the close button in the title bar
-        .padding(.trailing, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .foregroundStyle(Theme.ink)
+    }
+
+    /// Which mode Lina is in; click (or ⇧ + the shortcut) to move to the next one.
+    private var modeChip: some View {
+        Button { settings.companionMode = settings.companionMode.next } label: {
+            HStack(spacing: 4) {
+                Image(systemName: settings.companionMode.symbol).font(.system(size: 9.5, weight: .semibold))
+                Text(settings.companionMode.title).font(.system(size: 10.5, weight: .semibold))
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Theme.ink.opacity(settings.companionMode == .understand ? 0.08 : 0.16)))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Theme.ink)
+        .help("\(settings.companionMode.blurb) \(settings.hotKey.modeTitle) switches mode.")
     }
 
     @ViewBuilder private var stateDot: some View {
@@ -127,34 +210,46 @@ struct CompanionView: View {
         }
     }
 
-    // MARK: Trail
+    // MARK: Body
+
+    private var modeNote: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: settings.companionMode.symbol)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Theme.ink)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(settings.companionMode.title) mode").font(Theme.serif(15, weight: .semibold))
+                Text(settings.companionMode.blurb).font(Theme.serif(13)).foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    KeyCap(settings.hotKey.modeTitle, size: 9.5)
+                    Text("next mode").font(.system(size: 10.5)).foregroundStyle(.tertiary)
+                }
+                .padding(.top, 3)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+    }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Spacer()
-            Image(systemName: "text.bubble")
-                .font(.system(size: 28, weight: .light))
-                .foregroundStyle(Theme.ink.opacity(0.6))
-            Text("Write anywhere.")
-                .font(Theme.serif(17, weight: .semibold))
+        VStack(alignment: .leading, spacing: 6) {
             Text("When you pause, I'll read along and think with you about what you're saying, and why.")
                 .font(Theme.serif(13.5))
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 240)
+                .fixedSize(horizontal: false, vertical: true)
             if case let .error(message) = companion.state {
                 errorNote(message)
             }
-            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
     }
 
     private var trail: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(companion.entries) { entry in
                         EntryView(entry: entry).id(entry.id)
                     }
@@ -163,8 +258,11 @@ struct CompanionView: View {
                     }
                     Color.clear.frame(height: 1).id("end")
                 }
-                .padding(14)
+                .padding(12)
+                .background(GeometryReader { g in Color.clear.preference(key: TrailHeightKey.self, value: g.size.height) })
             }
+            .frame(height: min(max(trailHeight, 40), Self.maxTrailHeight))
+            .onPreferenceChange(TrailHeightKey.self) { trailHeight = $0 }
             .onChange(of: companion.entries) { _, _ in
                 withAnimation(Theme.quick) { proxy.scrollTo("end", anchor: .bottom) }
             }
@@ -288,4 +386,78 @@ private struct EntryView: View {
             .tracking(0.6)
             .foregroundStyle(.secondary)
     }
+}
+
+/// Edit and Auto modes: Lina's rewrite of the sentence just written, under the writer's own.
+private struct ProposalView: View {
+    let proposal: Companion.Proposal
+    let accept: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.system(size: 9.5, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.secondary)
+            Text(proposal.original)
+                .font(Theme.serif(13))
+                .foregroundStyle(.secondary)
+                .strikethrough(!proposal.streaming, color: .secondary.opacity(0.6))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(proposal.rewritten.isEmpty ? " " : proposal.rewritten)
+                    .font(Theme.serif(15, weight: .medium))
+                    .foregroundStyle(Theme.ink)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                if proposal.streaming { InkDot().frame(width: 6, height: 6) }
+            }
+            HStack(spacing: 6) {
+                if proposal.applied {
+                    KeyCap("⌘Z", size: 9.5)
+                    Text("undo").font(.system(size: 10.5)).foregroundStyle(.secondary)
+                } else if !proposal.streaming {
+                    Button(action: accept) {
+                        HStack(spacing: 4) {
+                            KeyCap("tab", size: 9.5)
+                            Text("use it").font(.system(size: 10.5, weight: .medium))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.ink)
+                    Button(action: dismiss) {
+                        HStack(spacing: 4) {
+                            KeyCap("esc", size: 9.5)
+                            Text("keep mine").font(.system(size: 10.5))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 6)
+                }
+                Spacer()
+            }
+            .padding(.top, 2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var title: String {
+        if proposal.applied { return "Rewrote your sentence" }
+        if proposal.streaming { return "Rewriting your sentence" }
+        return "Another way to say it"
+    }
+}
+
+private struct PopupHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct TrailHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }

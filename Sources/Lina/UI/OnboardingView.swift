@@ -78,7 +78,7 @@ struct OnboardingView: View {
             VStack(spacing: 10) {
                 Text("Write with someone beside you.")
                     .font(Theme.serif(30, weight: .semibold))
-                Text("Lina reads along in any app and, when you pause, thinks with you in a small floating window — what you're saying, why you're saying it, and where it could go.")
+                Text("Lina reads along in any app and, when you pause, thinks with you in a small popup just above your cursor — what you're saying, why you're saying it, and where it could go.")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -167,11 +167,13 @@ struct OnboardingView: View {
 
     private var ready: some View {
         StepLayout(symbol: "checkmark.seal", title: "You're ready.",
-                   message: "Open any app — Notes, Mail, Journal, a browser — and start writing. Lina's window will think with you when you pause.") {
+                   message: "Open any app — Notes, Mail, Journal, a browser — and start writing. Lina will think with you, right above your cursor, when you pause.") {
             VStack(spacing: 16) {
                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
                     ShortcutRow(keys: settings.hotKey.title.components(separatedBy: " "), text: "Show Lina and talk back")
                     ShortcutRow(keys: ["↩"], text: "Send your answer to Lina's question")
+                    ShortcutRow(keys: settings.hotKey.modeTitle.components(separatedBy: " "),
+                                text: "Switch mode: Understand, Edit, Auto")
                     ShortcutRow(keys: ["✦"], text: "Ask Lina to read your draft again now")
                 }
                 .padding(18)

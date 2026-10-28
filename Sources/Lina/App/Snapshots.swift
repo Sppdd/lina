@@ -40,8 +40,14 @@ enum Snapshots {
                 .writer("I think I want to forgive him, but I'm not ready."),
                 .reply("Then maybe the letter doesn't need to forgive him yet. It can just tell him what it cost you — the forgiving can come later, in another letter."),
             ])
-            render(CompanionView(companion: companion, input: CompanionInput()), size: CGSize(width: 340, height: 560),
+            render(CompanionView(companion: companion, input: CompanionInput()), size: nil,
                    dark: dark, to: dir.appendingPathComponent("companion\(suffix).png"))
+            let editing = Companion()
+            editing.preview(proposal: .init(original: "i dont know why i keep putting off calling him, its not like hes going anywhere.",
+                                            rewritten: "I don't know why I keep putting off calling him; it's not as if he's going anywhere.",
+                                            streaming: false))
+            render(CompanionView(companion: editing, input: CompanionInput()), size: nil,
+                   dark: dark, to: dir.appendingPathComponent("companion-edit\(suffix).png"))
 
             let ghost = GhostModel(); ghost.text = " and only the drip from the awning echoed softly."; ghost.fontSize = 14
             render(GhostView(model: ghost), size: nil, dark: dark, to: dir.appendingPathComponent("ghost\(suffix).png"))

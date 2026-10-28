@@ -75,9 +75,59 @@ enum PaletteHotKey: String, CaseIterable, Identifiable, Codable {
         case .commandShiftL: "⇧⌘ L"
         }
     }
+
+    /// The shortcut that cycles Understand → Edit → Auto: the same keys plus ⇧ (or ⌥ for ⇧⌘L).
+    var modeTitle: String {
+        switch self {
+        case .optionSpace: "⇧⌥ Space"
+        case .controlSpace: "⇧⌃ Space"
+        case .commandShiftL: "⌥⇧⌘ L"
+        }
+    }
 }
 
-/// All user preferences, persisted to UserDefaults. The API key lives in the Keychain.
+/// How much Lina does on its own, cycled with ⇧ + the companion shortcut (like Claude Code's modes).
+enum CompanionMode: String, CaseIterable, Identifiable, Codable {
+    /// Reads along and thinks with you. Never touches the draft.
+    case understand
+    /// When you finish a sentence, offers a rewrite of the whole sentence. ⇥ takes it.
+    case edit
+    /// Rewrites each sentence you finish in place. ⌘Z undoes it, like any edit.
+    case auto
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .understand: "Understand"
+        case .edit: "Edit"
+        case .auto: "Auto"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .understand: "text.bubble"
+        case .edit: "pencil.line"
+        case .auto: "wand.and.stars"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .understand: "Reads along and asks questions. Never edits."
+        case .edit: "Offers a rewrite of each sentence you finish. ⇥ takes it."
+        case .auto: "Rewrites each sentence you finish. ⌘Z undoes."
+        }
+    }
+
+    var next: CompanionMode {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
+}
+
+/// All user preferences, persisted to UserDefaults. The API key lives in `Secrets`.
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
@@ -86,8 +136,9 @@ final class AppSettings: ObservableObject {
     @Published var hasOnboarded: Bool { didSet { d.set(hasOnboarded, forKey: "hasOnboarded") } }
     /// Inline ghost text at the caret. Off by default: the companion window is Lina's main way of helping.
     @Published var enabled: Bool { didSet { d.set(enabled, forKey: "enabled") } }
-    /// The floating window that thinks with the writer about what they're writing and why.
+    /// The popup above the cursor that thinks with the writer about what they're writing and why.
     @Published var companionEnabled: Bool { didSet { d.set(companionEnabled, forKey: "companionEnabled") } }
+    @Published var companionMode: CompanionMode { didSet { d.set(companionMode.rawValue, forKey: "companionMode") } }
     @Published var companionModel: String { didSet { d.set(companionModel, forKey: "companionModel") } }
     /// How long a pause before the companion reads the draft again.
     @Published var companionPauseMs: Double { didSet { d.set(companionPauseMs, forKey: "companionPauseMs") } }
@@ -102,7 +153,7 @@ final class AppSettings: ObservableObject {
     @Published var dailyGoal: Int { didSet { d.set(dailyGoal, forKey: "dailyGoal") } }
     @Published var hotKey: PaletteHotKey { didSet { d.set(hotKey.rawValue, forKey: "hotKey") } }
     @Published var disabledApps: Set<String> { didSet { d.set(Array(disabledApps), forKey: "disabledApps") } }
-    @Published var apiKey: String { didSet { Keychain.set(apiKey, for: "nebius-api-key") } }
+    @Published var apiKey: String { didSet { Secrets.set(apiKey, for: "nebius-api-key") } }
 
     private init() {
         // Lina moved from autocomplete to a thinking companion: switch ghost text off once for existing installs.
@@ -124,6 +175,7 @@ final class AppSettings: ObservableObject {
         hasOnboarded = d.bool(forKey: "hasOnboarded")
         enabled = d.bool(forKey: "enabled")
         companionEnabled = d.bool(forKey: "companionEnabled")
+        companionMode = CompanionMode(rawValue: d.string(forKey: "companionMode") ?? "") ?? .understand
         companionModel = d.string(forKey: "companionModel") ?? Provider.defaultCompanionModel
         companionPauseMs = d.double(forKey: "companionPauseMs")
         provider = Provider(rawValue: d.string(forKey: "provider") ?? "") ?? .nebius
@@ -140,10 +192,10 @@ final class AppSettings: ObservableObject {
             "com.1password.1password", "com.agilebits.onepassword7", "com.apple.keychainaccess",
             "com.bitwarden.desktop", "com.apple.Terminal", "com.googlecode.iterm2",
         ])
-        // Key from Keychain, falling back to the environment and then a project .env for development.
+        // Saved key first, falling back to the environment and then a project .env for development.
         let names = ["LINA_NEBIUS_API_KEY", "NEBIUS_API_KEY", "TOKEN-FACTOR-API"]
         let env = ProcessInfo.processInfo.environment
-        apiKey = Keychain.get("nebius-api-key")
+        apiKey = Secrets.get("nebius-api-key")
             ?? names.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
             ?? DotEnv.first(of: names)
             ?? ""

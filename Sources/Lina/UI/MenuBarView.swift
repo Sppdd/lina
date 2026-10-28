@@ -21,7 +21,24 @@ struct MenuBarView: View {
             todayCard
 
             VStack(spacing: 0) {
-                ToggleRow(title: "Think with me", subtitle: "A floating window that reads along", isOn: $settings.companionEnabled)
+                ToggleRow(title: "Think with me", subtitle: "A popup above your cursor", isOn: $settings.companionEnabled)
+                Divider().padding(.leading, 12)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Mode").font(.system(size: 13))
+                        Spacer()
+                        Text(settings.hotKey.modeTitle).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Picker("Mode", selection: $settings.companionMode) {
+                        ForEach(CompanionMode.allCases) { Text($0.title).tag($0) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    Text(settings.companionMode.blurb).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 Divider().padding(.leading, 12)
                 ToggleRow(title: "Ghost text", subtitle: "Optional autocomplete at the cursor", isOn: $settings.enabled)
                 if !engine.currentApp.bundleID.isEmpty {

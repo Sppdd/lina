@@ -407,3 +407,132 @@ enum WordCount {
         return n
     }
 }
+
+extension Prompts {
+    /// Edit and Auto modes: rewrite the one sentence the writer just finished.
+    static func rewriteSentence(_ sentence: String, before: String, voice: VoicePreset, aboutMe: String) -> [ChatMessage] {
+        let sys = persona(voice, aboutMe: aboutMe) + """
+
+        Task: rewrite one sentence the writer just wrote so it reads better. Fix grammar, spelling and \
+        punctuation, make it clearer and smoother, and keep their meaning, voice, person, tense and roughly \
+        their length. Don't add new ideas. If the sentence is already good, return it exactly as it is. \
+        Output only the rewritten sentence: no quotes, no labels, no explanation.
+        """
+        var user = ""
+        let context = before.suffix(1500).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !context.isEmpty { user += "What comes before it:\n<context>\n\(context)</context>\n" }
+        user += "<sentence>\(sentence)</sentence>"
+        return [.system(sys), .user(user)]
+    }
+}
+
+/// Finds the sentence at the caret that Edit and Auto modes rewrite as a whole.
+enum Sentence {
+    struct Found: Equatable {
+        /// What to replace: the sentence plus any spaces between it and the caret.
+        var range: NSRange
+        /// The sentence itself, trimmed.
+        var text: String
+        /// The spaces after the sentence that the replacement has to keep, so the caret lands where it was.
+        var trailing: String
+    }
+
+    /// The sentence at the caret. With `finishedOnly`, only a sentence that ends in . ! ? (or …) right
+    /// before the caret, with nothing else on the line after it: the moment a writer has just finished one.
+    static func find(in text: NSString, caret: Int, finishedOnly: Bool) -> Found? {
+        let c = max(0, min(caret, text.length))
+        var e = c
+        while e > 0, [0x20, 0x09].contains(text.character(at: e - 1)) { e -= 1 }
+        guard e > 0, !isNewline(text.character(at: e - 1)) else { return nil }
+
+        if finishedOnly {
+            guard endsSentence(text, at: e) else { return nil }
+            let line = text.lineRange(for: NSRange(location: c, length: 0))
+            let rest = text.substring(with: NSRange(location: c, length: NSMaxRange(line) - c))
+            guard rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        }
+
+        // Split on . ! ? … followed by a space ourselves: the system's sentence finder won't split
+        // "late. i dont", and unpolished sentences like that are the ones worth rewriting.
+        let paragraph = text.paragraphRange(for: NSRange(location: e - 1, length: 0))
+        var start = paragraph.location
+        var i = paragraph.location
+        while i < e - 1 {
+            if let after = sentenceEnd(text, at: i), after < e, isSpace(text.character(at: after)), !isAbbreviation(text, endingAt: i) {
+                start = after
+                i = after
+            } else {
+                i += 1
+            }
+        }
+        var end = finishedOnly ? e : NSMaxRange(paragraph)
+        if !finishedOnly {
+            var j = e - 1
+            while j < NSMaxRange(paragraph) {
+                if let after = sentenceEnd(text, at: j),
+                   after >= NSMaxRange(paragraph) || isSpace(text.character(at: after)) {
+                    end = after
+                    break
+                }
+                j += 1
+            }
+        }
+        var r = NSRange(location: start, length: max(0, end - start))
+        // Trim whitespace at both ends so the range is exactly the sentence.
+        while r.length > 0, isSpace(text.character(at: r.location)) { r.location += 1; r.length -= 1 }
+        while r.length > 0, isSpace(text.character(at: NSMaxRange(r) - 1)) { r.length -= 1 }
+        let sentence = text.substring(with: r)
+        guard WordCount.count(sentence) >= 4 else { return nil }
+
+        let replaceEnd = max(NSMaxRange(r), c)
+        let trailing = text.substring(with: NSRange(location: NSMaxRange(r), length: replaceEnd - NSMaxRange(r)))
+        return Found(range: NSRange(location: r.location, length: replaceEnd - r.location), text: sentence, trailing: trailing)
+    }
+
+    /// Cleans the model's rewrite down to one sentence.
+    static func clean(_ raw: String, original: String) -> String {
+        var s = raw
+        for tag in ["<sentence>", "</sentence>"] { s = s.replacingOccurrences(of: tag, with: "") }
+        s = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        s = s.components(separatedBy: .newlines).first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? ""
+        s = s.trimmingCharacters(in: .whitespaces)
+        for (open, close) in [("\"", "\""), ("“", "”")] where s.count > 2 && s.hasPrefix(open) && s.hasSuffix(close)
+            && !original.hasPrefix(open) {
+            s = String(s.dropFirst().dropLast())
+        }
+        return s.trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func endsSentence(_ text: NSString, at e: Int) -> Bool {
+        var i = e - 1
+        // Step back over closing quotes and brackets: `He said "go."` ends a sentence too.
+        while i > 0, isCloser(text.character(at: i)) { i -= 1 }
+        return isTerminal(text.character(at: i))
+    }
+
+    /// If a sentence ends at `i` (. ! ? …, then any closing quotes), the index just past it.
+    private static func sentenceEnd(_ text: NSString, at i: Int) -> Int? {
+        guard isTerminal(text.character(at: i)) else { return nil }
+        var j = i + 1
+        while j < text.length, isTerminal(text.character(at: j)) || isCloser(text.character(at: j)) { j += 1 }
+        return j
+    }
+
+    private static let abbreviations: Set<String> = ["mr", "mrs", "ms", "dr", "st", "vs", "e.g", "i.e", "prof", "jr", "sr"]
+
+    /// "Dr." or "e.g." shouldn't end a sentence.
+    private static func isAbbreviation(_ text: NSString, endingAt i: Int) -> Bool {
+        var k = i
+        while k > 0, !isSpace(text.character(at: k - 1)) { k -= 1 }
+        let word = text.substring(with: NSRange(location: k, length: i - k)).lowercased()
+        return abbreviations.contains(word)
+    }
+
+    private static func isTerminal(_ u: unichar) -> Bool { u == 0x2E || u == 0x21 || u == 0x3F || u == 0x2026 }
+    private static func isCloser(_ u: unichar) -> Bool {
+        u == 0x22 || u == 0x27 || u == 0x201D || u == 0x2019 || u == 0x29 || u == 0x5D
+    }
+
+    private static func isNewline(_ u: unichar) -> Bool { u == 0x0A || u == 0x0D || u == 0x2028 || u == 0x2029 }
+    private static func isSpace(_ u: unichar) -> Bool { u == 0x20 || u == 0x09 || isNewline(u) }
+}
