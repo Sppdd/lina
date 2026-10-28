@@ -246,6 +246,88 @@ enum Prompts {
     }
 }
 
+/// What the companion window says back after reading a draft: not words to insert, but thinking.
+struct Reflection: Equatable {
+    /// What the writer seems to be saying, in a sentence.
+    var hearing = ""
+    /// Why they seem to be writing it — the reason or feeling underneath.
+    var why = ""
+    /// One question that would take the thinking further.
+    var ask = ""
+    /// A thread in the draft worth following next.
+    var next = ""
+
+    var isEmpty: Bool { hearing.isEmpty && why.isEmpty && ask.isEmpty && next.isEmpty }
+
+    /// Parses the tagged lines the companion prompt asks for. Works on a partial stream too.
+    static func parse(_ raw: String) -> Reflection {
+        var r = Reflection()
+        var current: WritableKeyPath<Reflection, String>?
+        for line in raw.components(separatedBy: .newlines) {
+            var l = line.trimmingCharacters(in: .whitespaces)
+            while let f = l.first, "*#-_".contains(f) { l.removeFirst() }
+            let upper = l.uppercased()
+            let tags: [(String, WritableKeyPath<Reflection, String>)] =
+                [("HEARING", \.hearing), ("WHY", \.why), ("ASK", \.ask), ("NEXT", \.next)]
+            if let (tag, path) = tags.first(where: { upper.hasPrefix($0.0) }) {
+                var rest = l.dropFirst(tag.count)
+                while let f = rest.first, ":*_ ".contains(f) { rest.removeFirst() }
+                current = path
+                r[keyPath: path] = String(rest)
+            } else if let path = current, !l.isEmpty {
+                r[keyPath: path] += (r[keyPath: path].isEmpty ? "" : " ") + l
+            }
+        }
+        return r
+    }
+}
+
+extension Prompts {
+    /// The companion reads the whole draft and thinks about it with the writer.
+    static func reflection(document: String, focus: String, appName: String, title: String,
+                           voice: VoicePreset, aboutMe: String, earlier: [String]) -> [ChatMessage] {
+        let sys = persona(voice, aboutMe: aboutMe) + """
+
+        Right now you are not completing their sentences. You sit in a small window beside the draft \
+        and think with the writer about what they are writing and why they are writing it. \
+        Read the whole draft. Notice the idea under the words, the feeling or purpose driving it, \
+        and what they haven't said yet. Talk to the writer as "you", warmly and plainly, like a friend \
+        who reads closely. Never rewrite their text and never write the next lines for them.
+
+        Answer in exactly this form, each part one or two short sentences (under 30 words):
+        HEARING: what you hear them saying, in your own words
+        WHY: why they seem to be writing this — the reason, need or feeling underneath
+        ASK: one specific question that would help them go deeper or say it truer
+        NEXT: one thread already in the draft that is worth following next
+        """
+        var user = ""
+        if !appName.isEmpty { user += "Writing in: \(appName)\(title.isEmpty ? "" : " — \(title)")\n" }
+        if !earlier.isEmpty {
+            user += "You already told them (don't repeat yourself):\n" + earlier.suffix(3).map { "- \($0)" }.joined(separator: "\n") + "\n"
+        }
+        user += "<draft>\n\(document.suffix(6000))</draft>"
+        let f = focus.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !f.isEmpty { user += "\nThey are working on this part right now:\n<current>\n\(f.suffix(800))</current>" }
+        return [.system(sys), .user(user)]
+    }
+
+    /// The writer talks back in the companion window.
+    static func conversation(document: String, history: [ChatMessage], voice: VoicePreset,
+                             aboutMe: String) -> [ChatMessage] {
+        let sys = persona(voice, aboutMe: aboutMe) + """
+
+        You sit in a small window beside the writer's draft and think with them about what they are \
+        writing and why. They are talking to you now. Answer in two to four short sentences, \
+        conversationally, as "you". Help them find their own words: reflect, question, suggest a direction. \
+        Only write sample sentences for their draft if they ask for them.
+        <draft>
+        \(document.suffix(6000))
+        </draft>
+        """
+        return [.system(sys)] + history.suffix(12)
+    }
+}
+
 /// Shapes raw model output into something that can sit right after the caret.
 enum Suggestion {
     /// Clean a continuation so it joins the writer's text naturally.

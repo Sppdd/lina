@@ -10,6 +10,8 @@ enum LiveTest {
         let args = CommandLine.arguments
         guard args.contains("--livetest") else { return }
         let settings = AppSettings.shared
+        // The test flips a few persisted settings; put the writer's own back before exiting.
+        let saved = (settings.enabled, settings.provider, settings.localModel, settings.disabledApps)
         if let i = args.firstIndex(of: "--local"), args.count > i + 1 {
             settings.provider = .local
             settings.localModel = args[i + 1]
@@ -18,6 +20,8 @@ enum LiveTest {
         settings.disabledApps.remove("com.apple.TextEdit")
         Task { @MainActor in
             let ok = await run(engine: engine)
+            await cleanUp()
+            (settings.enabled, settings.provider, settings.localModel, settings.disabledApps) = saved
             print(ok ? "\n✓ LIVE TEST PASSED" : "\n✗ LIVE TEST FAILED")
             exit(ok ? 0 : 1)
         }
@@ -31,7 +35,8 @@ enum LiveTest {
 
         engine.start()
         guard engine.status != .needsPermission else { say("Event tap could not start"); return false }
-        defer { closeTextEdit() }
+        // Leave the writer's own TextEdit documents alone: quit it only if we launched it.
+        quitTextEdit = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").isEmpty
 
         let before = "I didn't expect the city to feel so quiet after the rain. The streets were empty, and "
         // Getting a fresh, focused, empty document is the flaky part of driving another app — retry it.
@@ -80,6 +85,7 @@ enum LiveTest {
         try? await Task.sleep(for: .milliseconds(300))
         let target = ExternalTarget()
         say("Palette target sees: \(target.displayName) · \(target.focusDescription) · “\(target.focusText)”")
+        guard textEditInFront else { say("TextEdit is not in front — skipped the palette paste"); return false }
         target.replaceFocus(with: "hushed")
         try? await Task.sleep(for: .seconds(1.5))
         let after = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
@@ -88,10 +94,17 @@ enum LiveTest {
         return replaced
     }
 
+    /// Keystrokes are posted system-wide, so only send one while TextEdit is in front —
+    /// never into whatever app the writer may have switched to.
+    private static var textEditInFront: Bool {
+        NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.TextEdit"
+    }
+
     /// Posts keystrokes without Lina's marker, exactly as if the writer typed them.
     private static func typeAsUser(_ s: String) async {
         let src = CGEventSource(stateID: .hidSystemState)
         for ch in s.utf16 {
+            guard textEditInFront else { say("TextEdit lost focus — stopped typing"); return }
             for down in [true, false] {
                 let e = CGEvent(keyboardEventSource: src, virtualKey: ch == 32 ? CGKeyCode(kVK_Space) : 0, keyDown: down)
                 var u = [ch]
@@ -103,6 +116,7 @@ enum LiveTest {
     }
 
     private static func postKey(_ code: CGKeyCode) {
+        guard textEditInFront else { say("TextEdit is not in front — key not sent"); return }
         let src = CGEventSource(stateID: .hidSystemState)
         for down in [true, false] {
             let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: down)
@@ -117,6 +131,7 @@ enum LiveTest {
         let file = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("lina-livetest-\(UUID().uuidString.prefix(6)).txt")
         try? "".write(to: file, atomically: true, encoding: .utf8)
+        tempFiles.append(file)
         NSWorkspace.shared.open([file], withApplicationAt: URL(fileURLWithPath: "/System/Applications/TextEdit.app"),
                                 configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
         var stable = 0
@@ -136,6 +151,7 @@ enum LiveTest {
 
     private static func closeDocument() {
         // ⌘W closes the window; the file is a throwaway temp file that TextEdit autosaves.
+        guard textEditInFront else { return }
         let src = CGEventSource(stateID: .hidSystemState)
         for down in [true, false] {
             let e = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(kVK_ANSI_W), keyDown: down)
@@ -144,9 +160,23 @@ enum LiveTest {
         }
     }
 
-    private static func closeTextEdit() {
-        for app in NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit") {
-            app.terminate()
+    private static var tempFiles: [URL] = []
+    private static var quitTextEdit = false
+
+    private static func cleanUp() async {
+        guard !tempFiles.isEmpty else { return }  // never opened a document, so nothing of ours to close
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit")
+        if quitTextEdit {
+            apps.forEach { $0.terminate() }
+        } else {
+            closeDocument()
         }
+        // TextEdit autosaves as it closes; wait for that before deleting, or it writes the files back.
+        for _ in 0..<30 {
+            try? await Task.sleep(for: .milliseconds(100))
+            if quitTextEdit ? apps.allSatisfy(\.isTerminated) : false { break }
+        }
+        for file in tempFiles { try? FileManager.default.removeItem(at: file) }
+        tempFiles.removeAll()
     }
 }

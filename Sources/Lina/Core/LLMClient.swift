@@ -12,6 +12,7 @@ struct ChatMessage: Codable, Sendable {
 
     static func system(_ s: String) -> ChatMessage { .init(role: "system", content: s) }
     static func user(_ s: String) -> ChatMessage { .init(role: "user", content: s) }
+    static func assistant(_ s: String) -> ChatMessage { .init(role: "assistant", content: s) }
 }
 
 enum LLMError: LocalizedError {

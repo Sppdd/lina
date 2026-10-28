@@ -34,6 +34,9 @@ enum Provider: String, CaseIterable, Identifiable, Codable {
         case .local: "llama3.2"
         }
     }
+
+    /// The companion thinks about the whole draft, so it gets the larger Nemotron on Nebius.
+    static let defaultCompanionModel = "nvidia/nemotron-3-super-120b-a12b"
 }
 
 enum SuggestionLength: String, CaseIterable, Identifiable, Codable {
@@ -81,7 +84,13 @@ final class AppSettings: ObservableObject {
     private let d = UserDefaults.standard
 
     @Published var hasOnboarded: Bool { didSet { d.set(hasOnboarded, forKey: "hasOnboarded") } }
+    /// Inline ghost text at the caret. Off by default: the companion window is Lina's main way of helping.
     @Published var enabled: Bool { didSet { d.set(enabled, forKey: "enabled") } }
+    /// The floating window that thinks with the writer about what they're writing and why.
+    @Published var companionEnabled: Bool { didSet { d.set(companionEnabled, forKey: "companionEnabled") } }
+    @Published var companionModel: String { didSet { d.set(companionModel, forKey: "companionModel") } }
+    /// How long a pause before the companion reads the draft again.
+    @Published var companionPauseMs: Double { didSet { d.set(companionPauseMs, forKey: "companionPauseMs") } }
     @Published var provider: Provider { didSet { d.set(provider.rawValue, forKey: "provider") } }
     @Published var nebiusModel: String { didSet { d.set(nebiusModel, forKey: "nebiusModel") } }
     @Published var localBaseURL: String { didSet { d.set(localBaseURL, forKey: "localBaseURL") } }
@@ -96,8 +105,15 @@ final class AppSettings: ObservableObject {
     @Published var apiKey: String { didSet { Keychain.set(apiKey, for: "nebius-api-key") } }
 
     private init() {
+        // Lina moved from autocomplete to a thinking companion: switch ghost text off once for existing installs.
+        if !d.bool(forKey: "migratedToCompanion") {
+            d.set(false, forKey: "enabled")
+            d.set(true, forKey: "migratedToCompanion")
+        }
         d.register(defaults: [
-            "enabled": true,
+            "enabled": false,
+            "companionEnabled": true,
+            "companionPauseMs": 2500.0,
             "debounceMs": 550.0,
             "dailyGoal": 500,
             "provider": Provider.nebius.rawValue,
@@ -107,6 +123,9 @@ final class AppSettings: ObservableObject {
         ])
         hasOnboarded = d.bool(forKey: "hasOnboarded")
         enabled = d.bool(forKey: "enabled")
+        companionEnabled = d.bool(forKey: "companionEnabled")
+        companionModel = d.string(forKey: "companionModel") ?? Provider.defaultCompanionModel
+        companionPauseMs = d.double(forKey: "companionPauseMs")
         provider = Provider(rawValue: d.string(forKey: "provider") ?? "") ?? .nebius
         nebiusModel = d.string(forKey: "nebiusModel") ?? Provider.nebius.defaultModel
         localBaseURL = d.string(forKey: "localBaseURL") ?? Provider.local.defaultBaseURL
@@ -121,9 +140,13 @@ final class AppSettings: ObservableObject {
             "com.1password.1password", "com.agilebits.onepassword7", "com.apple.keychainaccess",
             "com.bitwarden.desktop", "com.apple.Terminal", "com.googlecode.iterm2",
         ])
-        // Key from Keychain, falling back to the environment for development.
+        // Key from Keychain, falling back to the environment and then a project .env for development.
+        let names = ["LINA_NEBIUS_API_KEY", "NEBIUS_API_KEY", "TOKEN-FACTOR-API"]
         let env = ProcessInfo.processInfo.environment
-        apiKey = Keychain.get("nebius-api-key") ?? env["LINA_NEBIUS_API_KEY"] ?? env["NEBIUS_API_KEY"] ?? ""
+        apiKey = Keychain.get("nebius-api-key")
+            ?? names.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
+            ?? DotEnv.first(of: names)
+            ?? ""
     }
 
     /// The connection the LLM client should use right now.
@@ -131,6 +154,16 @@ final class AppSettings: ObservableObject {
         switch provider {
         case .nebius:
             LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: nebiusModel)
+        case .local:
+            LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel)
+        }
+    }
+
+    /// The connection the companion window uses: Nemotron Super on Nebius, or the same local model.
+    var companionEndpoint: LLMEndpoint {
+        switch provider {
+        case .nebius:
+            LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: companionModel)
         case .local:
             LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel)
         }
@@ -150,5 +183,41 @@ final class AppSettings: ObservableObject {
                 NSLog("Lina: launch-at-login change failed: \(error)")
             }
         }
+    }
+}
+
+/// Reads `KEY=value` lines from the nearest `.env`, looking in the working directory and then
+/// up from the executable — so `.build/debug/Lina` and `build/Lina.app` both find the repo's file.
+enum DotEnv {
+    static func first(of names: [String]) -> String? {
+        guard let values = load() else { return nil }
+        return names.lazy.compactMap { values[$0] }.first { !$0.isEmpty }
+    }
+
+    private static func load() -> [String: String]? {
+        let fm = FileManager.default
+        var dirs = [URL(fileURLWithPath: fm.currentDirectoryPath)]
+        var dir = Bundle.main.executableURL?.resolvingSymlinksInPath().deletingLastPathComponent()
+        for _ in 0..<6 {
+            guard let d = dir else { break }
+            dirs.append(d)
+            dir = d.deletingLastPathComponent()
+        }
+        guard let file = dirs.lazy.map({ $0.appendingPathComponent(".env") }).first(where: { fm.fileExists(atPath: $0.path) }),
+              let text = try? String(contentsOf: file, encoding: .utf8)
+        else { return nil }
+        var values: [String: String] = [:]
+        for line in text.split(whereSeparator: \.isNewline) {
+            let line = line.trimmingCharacters(in: .whitespaces)
+            guard !line.hasPrefix("#"), let eq = line.firstIndex(of: "=") else { continue }
+            let key = line[..<eq].trimmingCharacters(in: .whitespaces)
+                .replacingOccurrences(of: "export ", with: "")
+            var value = line[line.index(after: eq)...].trimmingCharacters(in: .whitespaces)
+            if value.count >= 2, let q = value.first, q == "\"" || q == "'", value.last == q {
+                value = String(value.dropFirst().dropLast())
+            }
+            values[key] = value
+        }
+        return values
     }
 }

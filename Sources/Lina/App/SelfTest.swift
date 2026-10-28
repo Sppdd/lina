@@ -1,6 +1,6 @@
 import Foundation
 
-/// `Lina --selftest [--local MODEL]` exercises the real prompts against the configured model
+/// `Lina --selftest [--local MODEL] [--models] [--companion]` exercises the real prompts against the configured model
 /// and prints the results — a quick way to check a key or a new model from the terminal.
 enum SelfTest {
     static func runIfRequested() {
@@ -12,7 +12,43 @@ enum SelfTest {
             endpoint = LLMEndpoint(baseURL: Provider.local.defaultBaseURL, apiKey: "local", model: args[i + 1])
         }
         let client = LLMClient(endpoint: endpoint)
-        print("Lina self-test → \(endpoint.baseURL) · \(endpoint.model)\n")
+        if args.contains("--companion") {
+            let companion = LLMClient(endpoint: MainActor.assumeIsolated { settings.companionEndpoint })
+            print("Companion → \(companion.endpoint.model)\n")
+            let draft = """
+            I keep starting this letter to my father and deleting it. He's been gone two years and \
+            I still set the table for four sometimes. I want to tell him the shop is doing fine, \
+            that Mom laughs again, but every sentence sounds like a report. Maybe what I actually want \
+            to say is that I'm angry he never let me help.
+            """
+            let done = DispatchSemaphore(value: 0)
+            Task.detached {
+                do {
+                    let t0 = Date()
+                    let raw = try await companion.complete(
+                        Prompts.reflection(document: draft, focus: "", appName: "Notes", title: "Letter",
+                                           voice: .journal, aboutMe: "", earlier: []),
+                        maxTokens: 400, temperature: 0.6)
+                    let r = Reflection.parse(raw)
+                    print("(\(Int(Date().timeIntervalSince(t0) * 1000)) ms)")
+                    print("Hearing: \(r.hearing)\nWhy: \(r.why)\nAsk: \(r.ask)\nNext: \(r.next)")
+                    if r.isEmpty { print("✗ Could not parse:\n\(raw)") }
+                } catch { print("✗ \(error.localizedDescription)") }
+                done.signal()
+            }
+            done.wait()
+            exit(0)
+        }
+        if args.contains("--models") {
+            let done = DispatchSemaphore(value: 0)
+            Task.detached {
+                do { print(try await client.listModels().joined(separator: "\n")) } catch { print("✗ \(error.localizedDescription)") }
+                done.signal()
+            }
+            done.wait()
+            exit(0)
+        }
+        print("Lina self-test → \(endpoint.baseURL) · \(endpoint.model) · key \(endpoint.apiKey.isEmpty ? "missing" : "\(endpoint.apiKey.count) chars")\n")
 
         let done = DispatchSemaphore(value: 0)
         Task.detached {
