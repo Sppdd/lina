@@ -102,7 +102,7 @@ final class PaletteController: ObservableObject {
         runningCustom = nil
         let messages = Prompts.action(action, ctx: target.context,
                                       query: query.trimmingCharacters(in: .whitespaces),
-                                      voice: settings.voice, aboutMe: settings.aboutMe)
+                                      voice: settings.voice, aboutMe: settings.writerNotes)
         start(messages, maxTokens: action.maxTokens, temperature: action.temperature) { [weak self] text in
             if action == .findWord { self?.options = Suggestion.options(text) }
         }
@@ -112,7 +112,7 @@ final class PaletteController: ObservableObject {
         guard let target, !instruction.isEmpty else { return }
         running = nil
         runningCustom = instruction
-        let messages = Prompts.custom(instruction, ctx: target.context, voice: settings.voice, aboutMe: settings.aboutMe)
+        let messages = Prompts.custom(instruction, ctx: target.context, voice: settings.voice, aboutMe: settings.writerNotes)
         start(messages, maxTokens: 700, temperature: 0.6, onUpdate: nil)
     }
 

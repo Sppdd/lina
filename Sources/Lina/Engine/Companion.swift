@@ -2,12 +2,16 @@ import AppKit
 import Carbon.HIToolbox
 import Combine
 
-/// Lina's main way of helping: a popup just above your cursor that reads what you're writing, in any app.
-/// What it does depends on the mode, cycled with ⇧ + the companion shortcut:
+/// Lina's main way of helping: it reads what you're writing in any app and answers in ink, in a card just
+/// above your cursor (or in the popup when the ink drop is off). What it does depends on the mode, cycled
+/// with ⇧ + the companion shortcut:
 /// - Understand thinks about it with you — what you seem to be saying, why, and where it could go —
 ///   and never types into your document; you can talk back to it.
 /// - Edit offers a rewrite of each sentence you finish; ⇥ takes it, esc keeps yours.
 /// - Auto rewrites each sentence you finish in place; ⌘Z undoes it like any edit.
+///
+/// In every mode, `/lina <instruction>` then Return works on the text right there: edit it, write
+/// something new, turn it into a picture, or remember it.
 @MainActor
 final class Companion: ObservableObject {
     enum State: Equatable { case waiting, reading, thinking, paused, error(String) }
@@ -83,6 +87,15 @@ final class Companion: ObservableObject {
     private var talkHeld = false
     private var talkPending: DispatchWorkItem?
     @Published private(set) var listening = false
+    /// A `/lina` command is being carried out.
+    @Published private(set) var working = false
+    private var commandTask: Task<Void, Never>?
+    /// The last things typed, so Return only looks for a `/lina` command after one was typed.
+    private var typedTail = ""
+    /// Whether the current rewrite is shown in ink (or in the popup, when the drop is off).
+    private var proposalInInk = false
+    /// The last reflection, to show at the next pause if it arrived while the writer was typing.
+    private var lastReflection: Reflection?
 
     init() {
         settings.$companionEnabled
@@ -107,9 +120,13 @@ final class Companion: ObservableObject {
             .sink { [weak self] _ in self?.dropProposal() }
             .store(in: &bag)
         // The drop's mood follows what Lina is doing.
-        Publishers.CombineLatest3($state, $proposal, $listening)
+        Publishers.CombineLatest4($state, $proposal, $listening, $working)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncInkState() }
+            .store(in: &bag)
+        $proposal
+            .receive(on: RunLoop.main)
+            .sink { [weak self] p in self?.renderProposal(p) }
             .store(in: &bag)
         voice.onLevel = { [weak self] level in self?.ink.model.audioLevel = level }
         inkTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
@@ -166,19 +183,24 @@ final class Companion: ObservableObject {
         }
     }
 
-    /// Hide the popup; the writer keeps going.
+    /// Hide the popup and Lina's card; the writer keeps going.
     func dismiss() {
         ink.cancelPointing()
         dropProposal()
         announcingMode = false
+        if !working { ink.clearCard() }
         panel.hide()
     }
 
-    /// Shows the popup just above the writer's cursor.
+    /// Shows the popup just above the writer's cursor. It takes over from the ink card.
     private func present(at caret: CGRect? = nil) {
         unseen = false
+        if !working { ink.clearCard() }
         panel.show(above: caret ?? currentCaret())
     }
+
+    /// Lina writes in ink above the caret whenever the drop is there to do it.
+    private var useInk: Bool { settings.inkEnabled && ink.isVisible && !panel.isVisible }
 
     private func currentCaret() -> CGRect? {
         if DeskRegistry.shared.activeTarget != nil, let tv = DeskRegistry.shared.textView {
@@ -200,12 +222,14 @@ final class Companion: ObservableObject {
         // (An offered rewrite no longer matches the draft once they type, so it goes too.)
         dropProposal()
         announcingMode = false
+        if !working { ink.clearCard() }
         panel.hide()
         schedule(after: settings.companionMode == .understand ? nil : Self.rewritePauseMs)
     }
 
     /// Called when the writer switches apps or windows.
     func focusChanged() {
+        typedTail = ""
         guard settings.companionEnabled else { return }
         if !panel.isKey { dismiss() }
         ink.hide()
@@ -215,6 +239,7 @@ final class Companion: ObservableObject {
 
     /// A click anywhere. Clicking outside the popup moves the cursor, so the popup goes away.
     func mouseDown() {
+        typedTail = ""
         ink.cancelPointing()
         followCaretSoon()
         guard panel.isVisible, !panel.frame.contains(NSEvent.mouseLocation) else { return }
@@ -225,7 +250,8 @@ final class Companion: ObservableObject {
     func handleKey(_ event: CGEvent) -> Bool {
         // A key while ⌃⌥ is held is a shortcut, not talking.
         if talkHeld { cancelTalking() }
-        guard panel.isVisible else { return false }
+        if watchForCommand(event) { return true }
+        guard panel.isVisible || ink.hasCard else { return false }
         let mods = event.flags.intersection([.maskCommand, .maskControl, .maskAlternate, .maskShift])
         guard mods.isEmpty else { return false }
         switch event.keyCode {
@@ -233,7 +259,7 @@ final class Companion: ObservableObject {
             acceptProposal()
             return true
         case kVK_Escape:
-            dismiss()
+            if working { cancelCommand() } else { dismiss() }
             return true
         default:
             return false
@@ -284,6 +310,7 @@ final class Companion: ObservableObject {
             return
         }
         guard let draft = currentDraft() else {
+            Diagnostics.log("read", "no readable text field in front")
             if state != .thinking { state = .waiting }
             return
         }
@@ -293,7 +320,9 @@ final class Companion: ObservableObject {
         guard words >= 12, force || moved || abs(words - lastReflectedWords) >= 12 else {
             document = draft.text
             wordCount = words
-            if unseen && !panel.isVisible { present(at: draft.caret) }
+            if unseen && !panel.isVisible {
+                if useInk, let r = lastReflection { unseen = false; ink.show(reflectionCard(r)) } else { present(at: draft.caret) }
+            }
             return
         }
         if moved {
@@ -304,6 +333,7 @@ final class Companion: ObservableObject {
         document = draft.text
         wordCount = words
         lastReflectedWords = words
+        Diagnostics.log("read", "reflecting on \(words) words in \(draft.appName) (\(useInk ? "ink card" : "popup"))")
         reflect(on: draft)
     }
 
@@ -313,22 +343,30 @@ final class Companion: ObservableObject {
             return nil
         }
         let messages = Prompts.reflection(document: draft.text, focus: draft.focus, appName: draft.appName,
-                                          title: draft.title, voice: settings.voice, aboutMe: settings.aboutMe,
+                                          title: draft.title, voice: settings.voice, aboutMe: settings.writerNotes,
                                           earlier: earlier)
         let id = append(.init(kind: .reflection(Reflection()), streaming: true))
         let caret = draft.caret
+        let inInk = useInk
         var shown = false
-        run(messages, maxTokens: 400, temperature: 0.6, into: id, onPiece: { [weak self] in
-            // Pop up above the cursor with the first words, unless the writer is already typing again.
-            guard let self, !shown else { return }
-            shown = true
-            if Date().timeIntervalSince(self.lastTyped) * 1000 >= self.settings.companionPauseMs * 0.8 {
+        run(messages, maxTokens: 400, temperature: 0.6, into: id, onPiece: { [weak self] kind in
+            // Speak up with the first words, unless the writer is already typing again.
+            guard let self, case let .reflection(r) = kind else { return }
+            self.lastReflection = r
+            let paused = Date().timeIntervalSince(self.lastTyped) * 1000 >= self.settings.companionPauseMs * 0.8
+            guard paused else { self.unseen = true; return }
+            if inInk {
+                // Written in ink just above the caret, as it comes.
+                self.unseen = false
+                if !self.working { self.ink.show(self.reflectionCard(r, streaming: true)) }
+            } else if !shown {
+                shown = true
                 self.present(at: caret)
-            } else {
-                self.unseen = true
             }
         }, onDone: { [weak self] kind in
             guard let self, case let .reflection(r) = kind else { return }
+            self.lastReflection = r
+            if inInk, !self.unseen, !self.working, self.ink.hasCard { self.ink.show(self.reflectionCard(r)) }
             if self.settings.speakAloud { self.speaker.say(r.ask) }
             // Like Clicky pointing at a button: show the writer where the thread lives in their own words.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
@@ -354,18 +392,20 @@ final class Companion: ObservableObject {
         if finishedOnly && handledSentences.contains(found.text) { return false }
         // Only right after the writer finished it, not when they come back to a document later.
         if finishedOnly && Date().timeIntervalSince(lastTyped) > 10 { return false }
+        Diagnostics.log("rewrite", "sentence of \(found.text.count) chars, \(settings.companionMode.title) mode\(instruction == nil ? "" : ", spoken instruction")")
         remember(found.text)
 
         rewriteTask?.cancel()
         let target = RewriteTarget(pid: snap.pid, text: snap.text, caret: snap.selection.location, found: found)
         rewriteTarget = target
+        proposalInInk = useInk
         proposal = Proposal(original: found.text)
         announcingMode = false
-        present(at: snap.caretRect)
+        if !proposalInInk { present(at: snap.caretRect) }
 
         let before = snap.text.substring(to: found.range.location)
         let messages = Prompts.rewriteSentence(found.text, before: before, instruction: instruction,
-                                               voice: settings.voice, aboutMe: settings.aboutMe)
+                                               voice: settings.voice, aboutMe: settings.writerNotes)
         let client = LLMClient(endpoint: settings.endpoint)
         let auto = settings.companionMode == .auto
         rewriteTask = Task { [weak self] in
@@ -389,6 +429,7 @@ final class Companion: ObservableObject {
             } catch {
                 guard let self, self.proposal?.original == found.text else { return }
                 self.dropProposal()
+                Diagnostics.log("model", "error: \(error.localizedDescription)")
                 self.state = .error(error.localizedDescription)
                 self.panel.hide()
             }
@@ -401,7 +442,11 @@ final class Companion: ObservableObject {
         guard let p = proposal, !p.streaming, !p.applied, !p.rewritten.isEmpty, let t = rewriteTarget else { return }
         guard let now = AX.snapshot(requireCaret: false), now.pid == t.pid, now.text.isEqual(to: t.text as String),
               now.selection.location == t.caret
-        else { dismiss(); return }
+        else {
+            Diagnostics.log("rewrite", "not written: the draft changed since Lina read it")
+            dismiss()
+            return
+        }
         AX.select(t.found.range, in: now.element)
         TextInserter.paste(p.rewritten + t.found.trailing)
         if settings.companionMode == .auto {
@@ -440,11 +485,17 @@ final class Companion: ObservableObject {
 
     /// Keeps the drop beside the caret, and out of sight when there's nowhere to write.
     private func refreshInk() {
-        guard settings.inkEnabled, settings.companionEnabled, settings.hasOnboarded else { ink.hide(); return }
+        // With the drop switched off it still comes out to say something, like a `/lina` command finishing.
+        let busy = working || ink.hasCard || ink.isSaying
+        guard settings.hasOnboarded, (settings.inkEnabled && settings.companionEnabled) || busy else { ink.hide(); return }
         if ink.isPointing { return }
         // While the popup is up it's the one talking; the drop steps aside (unless it's listening).
         if panel.isVisible && !listening { ink.hide(); return }
-        guard let caret = inkCaret() else { ink.hide(); return }
+        guard let caret = inkCaret() else {
+            if ink.isVisible { Diagnostics.log("ink", "hid: no caret reported in \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?")") }
+            ink.hide()
+            return
+        }
         let appearing = !ink.isVisible
         ink.follow(caret)
         if appearing && !UserDefaults.standard.bool(forKey: "inkWelcomed") {
@@ -462,8 +513,22 @@ final class Companion: ObservableObject {
     private func syncInkState() {
         guard !ink.isPointing else { return }
         if listening { ink.model.state = .listening }
-        else if state == .thinking || proposal?.streaming == true { ink.model.state = .thinking }
+        else if working || state == .thinking || proposal?.streaming == true { ink.model.state = .thinking }
         else { ink.model.state = .resting }
+    }
+
+    private func reflectionCard(_ r: Reflection, streaming: Bool = false) -> InkCard {
+        InkCard(eyebrow: "lina hears", text: r.hearing, detail: r.ask,
+                hint: streaming ? "" : "\(settings.hotKey.title) to reply · hold ⌃⌥ to talk · esc", streaming: streaming)
+    }
+
+    /// Edit and Auto: the rewrite, written in ink over the sentence it would replace.
+    private func renderProposal(_ p: Proposal?) {
+        guard proposalInInk, !working else { return }
+        guard let p else { ink.clearCard(); return }
+        let hint = p.applied ? "⌘Z undoes it" : p.streaming ? "" : "⇥ use it · esc keep mine"
+        ink.show(InkCard(eyebrow: p.applied ? "rewritten" : "rewrite", text: p.rewritten.isEmpty ? "…" : p.rewritten,
+                         original: p.original, hint: hint, streaming: p.streaming))
     }
 
     private static let threadNotes = ["stay with this", "this thread", "there's more here", "follow this"]
@@ -527,6 +592,7 @@ final class Companion: ObservableObject {
             guard let self else { return }
             let started = await self.voice.start()
             guard started else {
+                Diagnostics.log("talk", "couldn't start listening (microphone or speech permission)")
                 self.listening = false
                 self.ink.say("I need the microphone and speech recognition", hold: 3)
                 return
@@ -561,6 +627,242 @@ final class Companion: ObservableObject {
         send(said)
     }
 
+    // MARK: /lina commands
+
+    /// Where a `/lina` command was typed, and the draft exactly as Lina read it.
+    private struct CommandSite {
+        let text: NSString
+        let caret: Int
+        let caretRect: CGRect?
+        let source: String
+        /// The field in another app; nil for the Desk.
+        let element: AXUIElement?
+        let pid: pid_t
+    }
+
+    private enum Writing {
+        case text(String)
+        case image(Data, fallback: String)
+    }
+
+    /// Keeps a short memory of what was typed; on Return after a `/lina …`, carries the command out
+    /// instead of starting a new line. Returns true to swallow the key.
+    private func watchForCommand(_ event: CGEvent) -> Bool {
+        let flags = event.flags
+        if flags.contains(.maskCommand) || flags.contains(.maskControl) { typedTail = ""; return false }
+        switch event.keyCode {
+        case kVK_Return, kVK_ANSI_KeypadEnter:
+            defer { typedTail = "" }
+            guard typedTail.lowercased().contains("/lina "), !flags.contains(.maskShift), !flags.contains(.maskAlternate)
+            else { return false }
+            return runCommandAtCaret()
+        case kVK_Delete:
+            if !typedTail.isEmpty { typedTail.removeLast() }
+        default:
+            let typed = event.typedString
+            guard !typed.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { break }
+            typedTail = String((typedTail + typed).suffix(400))
+        }
+        return false
+    }
+
+    private func runCommandAtCaret() -> Bool {
+        guard let site = commandSite() else {
+            Diagnostics.log("command", "return after /lina, but the text field couldn't be read (selection, paused app, or no Accessibility)")
+            return false
+        }
+        guard let cmd = LinaCommand.find(in: site.text, caret: site.caret) else {
+            Diagnostics.log("command", "return after /lina, but no command ends at the caret (caret \(site.caret) of \(site.text.length))")
+            return false
+        }
+        if let rect = site.caretRect { ink.follow(rect) }
+        guard settings.isModelConfigured || cmd.kind == .remember else {
+            ink.say("add your Nebius key in Settings first", hold: 3)
+            return true
+        }
+        perform(cmd, at: site)
+        return true
+    }
+
+    private func commandSite() -> CommandSite? {
+        if DeskRegistry.shared.activeTarget != nil, let tv = DeskRegistry.shared.textView {
+            let sel = tv.selectedRange()
+            guard sel.length == 0 else { return nil }
+            return CommandSite(text: NSString(string: tv.string), caret: sel.location, caretRect: currentCaret(),
+                               source: "Desk", element: nil, pid: 0)
+        }
+        guard let snap = AX.snapshot(requireCaret: false), !settings.disabledApps.contains(snap.bundleID),
+              snap.selection.length == 0
+        else { return nil }
+        let source = snap.windowTitle.isEmpty ? snap.appName : "\(snap.appName) · \(snap.windowTitle)"
+        return CommandSite(text: snap.text, caret: snap.selection.location, caretRect: snap.caretRect,
+                           source: source, element: snap.element, pid: snap.pid)
+    }
+
+    private func perform(_ cmd: LinaCommand, at site: CommandSite) {
+        commandTask?.cancel()
+        ink.cancelPointing()
+        dropProposal()
+        panel.hide()
+        let commandText = site.text.substring(with: cmd.range)
+        Diagnostics.log("command", "\(cmd.kind) in \(site.source.split(separator: "·").first.map(String.init) ?? site.source): instruction \(cmd.instruction.count) chars, target \(cmd.target.length) chars, same line \(cmd.targetOnSameLine)")
+        switch cmd.kind {
+        case .report:
+            // Describe the field before touching it, so the report shows the moment the writer saw.
+            let focus = site.element == nil ? "- The Desk: \(site.text.length) characters, caret at \(site.caret)" : AX.describeFocus()
+            write(.text(""), over: cmd.range, expecting: commandText, in: site)
+            let saved = Diagnostics.report(cmd.reportNote, kind: "Reported with /lina bug, right where it happened", focus: focus)
+            ink.say(saved == nil ? "I couldn't save the report" : "report copied · paste it to Claude", hold: 3)
+        case .remember:
+            let text = cmd.memoryText
+            guard !text.isEmpty else { ink.say("there's nothing above to remember"); return }
+            MemoryStore.shared.add(text, source: site.source)
+            // The command has done its job; take it out of the draft.
+            write(.text(""), over: cmd.range, expecting: commandText, in: site)
+            ink.say("I'll remember that", hold: 2.4)
+        case .write, .image:
+            working = true
+            let doing = cmd.kind == .image ? "drawing it…" : cmd.target.length > 0 ? "working on the text above…" : "writing…"
+            ink.show(InkCard(eyebrow: "/lina " + cmd.instruction, text: doing, hint: "esc stops", streaming: true))
+            commandTask = Task { [weak self] in await self?.carryOut(cmd, at: site, commandText: commandText) }
+        }
+    }
+
+    private func carryOut(_ cmd: LinaCommand, at site: CommandSite, commandText: String) async {
+        let client = LLMClient(endpoint: settings.companionEndpoint)
+        do {
+            switch cmd.kind {
+            case .image:
+                let described = try await client.complete(
+                    Prompts.imagePrompt(description: cmd.targetText, instruction: cmd.instruction),
+                    maxTokens: 200, temperature: 0.7)
+                let prompt = described.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"“”")))
+                try Task.checkCancellation()
+                ink.show(InkCard(eyebrow: "/lina " + cmd.instruction, text: "drawing it…",
+                                 detail: "", original: "", hint: prompt.isEmpty ? "esc stops" : prompt, streaming: true))
+                let png = try await settings.imageClient.generate(prompt.isEmpty ? cmd.instruction : prompt)
+                try Task.checkCancellation()
+                let file = try ImageClient.save(png, named: prompt.isEmpty ? cmd.instruction : prompt)
+                let alt = String((cmd.targetText.isEmpty ? cmd.instruction : cmd.targetText).prefix(60))
+                    .replacingOccurrences(of: "\n", with: " ")
+                guard write(.image(png, fallback: "![\(alt)](\(file.absoluteString))"), over: cmd.range,
+                            expecting: commandText, in: site)
+                else { return finishCommand("the text changed, so I kept the picture in Pictures/Lina") }
+                finishCommand("there it is · also in Pictures/Lina")
+            case .write:
+                let before = site.text.substring(to: cmd.target.length > 0 ? cmd.target.location : cmd.range.location)
+                let after = site.text.substring(from: NSMaxRange(cmd.range))
+                let raw = try await client.complete(
+                    Prompts.command(cmd.instruction, target: cmd.targetText, before: before, after: after,
+                                    voice: settings.voice, aboutMe: settings.writerNotes),
+                    maxTokens: 1500, temperature: 0.5)
+                try Task.checkCancellation()
+                let reply = CommandReply.parse(raw, hasTarget: cmd.target.length > 0)
+                Diagnostics.log("command", "model answered \(raw.count) chars → \(reply.replace ? "replace" : "insert") \(reply.text.count) chars")
+                guard !reply.text.isEmpty else { return finishCommand("I couldn't do that one") }
+                let wrote: Bool
+                if reply.replace {
+                    // Keep the line breaks between the paragraph and the command, so the caret lands below it.
+                    let replacement = reply.text + (cmd.targetOnSameLine ? "" : cmd.gap)
+                    wrote = write(.text(replacement), over: cmd.replaceRange,
+                                  expecting: site.text.substring(with: cmd.replaceRange), in: site)
+                } else {
+                    wrote = write(.text(reply.text), over: cmd.range, expecting: commandText, in: site)
+                }
+                finishCommand(wrote ? "done · ⌘Z undoes" : "the text changed, so I left it")
+            case .remember, .report:
+                break
+            }
+        } catch is CancellationError {
+        } catch let e as URLError where e.code == .cancelled {
+        } catch {
+            guard !Task.isCancelled else { return }
+            Diagnostics.log("command", "failed: \(error.localizedDescription)")
+            working = false
+            let card = InkCard(eyebrow: "couldn't finish /lina " + cmd.instruction, text: error.localizedDescription, hint: "esc")
+            ink.show(card)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+                MainActor.assumeIsolated { if self?.ink.model.card == card { self?.ink.clearCard() } }
+            }
+        }
+    }
+
+    private func finishCommand(_ note: String) {
+        Diagnostics.log("command", "finished: \(note)")
+        working = false
+        commandTask = nil
+        ink.clearCard()
+        ink.say(note, hold: 2.8)
+    }
+
+    private func cancelCommand() {
+        commandTask?.cancel()
+        commandTask = nil
+        working = false
+        ink.clearCard()
+        ink.say("stopped")
+    }
+
+    /// Writes over `range`, but only if that part of the draft still says what Lina read.
+    @discardableResult
+    private func write(_ writing: Writing, over range: NSRange, expecting original: String, in site: CommandSite) -> Bool {
+        guard let element = site.element else {
+            guard let tv = DeskRegistry.shared.textView else { return false }
+            let now = tv.string as NSString
+            guard NSMaxRange(range) <= now.length, now.substring(with: range) == original else { return false }
+            switch writing {
+            case let .text(s): tv.insertText(s, replacementRange: range)
+            // The Desk is plain text: a link to the picture.
+            case let .image(_, fallback): tv.insertText(fallback, replacementRange: range)
+            }
+            return true
+        }
+        guard let now = AX.snapshot(requireCaret: false), now.pid == site.pid,
+              NSMaxRange(range) <= now.text.length, now.text.substring(with: range) == original
+        else {
+            Diagnostics.log("write", "skipped: the field changed or lost focus since Lina read it")
+            return false
+        }
+        AX.select(range, in: CFEqual(now.element, element) ? element : now.element)
+        switch writing {
+        case let .text(s) where s.isEmpty: TextInserter.deleteSelection()
+        case let .text(s): TextInserter.paste(s)
+        case let .image(png, fallback): TextInserter.paste(image: png, fallback: fallback)
+        }
+        return true
+    }
+
+    // MARK: Memory
+
+    /// ⌃⌥M: whatever the writer highlighted goes into Lina's memory.
+    func rememberSelection() {
+        cancelTalking()
+        var text = ""
+        var rect: CGRect?
+        var source = "Desk"
+        if DeskRegistry.shared.activeTarget != nil, let tv = DeskRegistry.shared.textView {
+            let sel = tv.selectedRange()
+            if sel.length > 0 {
+                text = (tv.string as NSString).substring(with: sel)
+                rect = tv.firstRect(forCharacterRange: sel, actualRange: nil)
+            }
+        } else if let snap = AX.snapshot(requireCaret: false) {
+            text = snap.selectedText
+            rect = AX.screenRect(for: snap.selection, in: snap.element) ?? snap.caretRect
+            source = snap.windowTitle.isEmpty ? snap.appName : "\(snap.appName) · \(snap.windowTitle)"
+        }
+        if let rect, rect != .zero { ink.follow(rect) } else if let caret = currentCaret() { ink.follow(caret) }
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else {
+            Diagnostics.log("memory", "⌃⌥M with no readable selection")
+            ink.say("highlight something first, then ⌃⌥M", hold: 2.6)
+            return
+        }
+        Diagnostics.log("memory", "saved \(clean.count) chars")
+        MemoryStore.shared.add(clean, source: source)
+        ink.say("saved to my memory", hold: 2.4)
+    }
+
     // MARK: Talking back
 
     func send(_ text: String) {
@@ -579,7 +881,7 @@ final class Companion: ObservableObject {
             }
         }
         let messages = Prompts.conversation(document: document, history: history,
-                                            voice: settings.voice, aboutMe: settings.aboutMe)
+                                            voice: settings.voice, aboutMe: settings.writerNotes)
         let id = append(.init(kind: .reply(""), streaming: true))
         run(messages, maxTokens: 300, temperature: 0.7, into: id, onPiece: nil, onDone: { [weak self] kind in
             guard let self, self.settings.speakAloud, case let .reply(text) = kind else { return }
@@ -597,7 +899,7 @@ final class Companion: ObservableObject {
     // MARK: Model
 
     private func run(_ messages: [ChatMessage], maxTokens: Int, temperature: Double, into id: UUID,
-                     onPiece: (() -> Void)?, onDone: ((Entry.Kind) -> Void)? = nil,
+                     onPiece: ((Entry.Kind) -> Void)?, onDone: ((Entry.Kind) -> Void)? = nil,
                      shape: @escaping (String) -> Entry.Kind) {
         task?.cancel()
         generation += 1
@@ -610,8 +912,9 @@ final class Companion: ObservableObject {
                 for try await piece in client.stream(messages, maxTokens: maxTokens, temperature: temperature) {
                     guard let self, gen == self.generation else { return }
                     raw += piece
-                    self.update(id, kind: shape(raw), streaming: true)
-                    onPiece?()
+                    let kind = shape(raw)
+                    self.update(id, kind: kind, streaming: true)
+                    onPiece?(kind)
                 }
                 guard let self, gen == self.generation else { return }
                 self.update(id, kind: shape(raw), streaming: false)
@@ -623,6 +926,7 @@ final class Companion: ObservableObject {
             } catch {
                 guard let self, gen == self.generation else { return }
                 self.remove(id)
+                Diagnostics.log("model", "error: \(error.localizedDescription)")
                 self.state = .error(error.localizedDescription)
             }
         }

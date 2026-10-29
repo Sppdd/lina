@@ -37,6 +37,9 @@ enum Provider: String, CaseIterable, Identifiable, Codable {
 
     /// The companion thinks about the whole draft, so it gets the larger Nemotron on Nebius.
     static let defaultCompanionModel = "nvidia/nemotron-3-super-120b-a12b"
+
+    /// `/lina turn this into a photo` draws with a text-to-image model on the same Token Factory key.
+    static let defaultImageModel = "black-forest-labs/flux-schnell"
 }
 
 enum SuggestionLength: String, CaseIterable, Identifiable, Codable {
@@ -146,6 +149,7 @@ final class AppSettings: ObservableObject {
     /// Read Lina's questions and replies aloud.
     @Published var speakAloud: Bool { didSet { d.set(speakAloud, forKey: "speakAloud") } }
     @Published var companionModel: String { didSet { d.set(companionModel, forKey: "companionModel") } }
+    @Published var imageModel: String { didSet { d.set(imageModel, forKey: "imageModel") } }
     /// How long a pause before the companion reads the draft again.
     @Published var companionPauseMs: Double { didSet { d.set(companionPauseMs, forKey: "companionPauseMs") } }
     @Published var provider: Provider { didSet { d.set(provider.rawValue, forKey: "provider") } }
@@ -189,6 +193,7 @@ final class AppSettings: ObservableObject {
         talkEnabled = d.bool(forKey: "talkEnabled")
         speakAloud = d.bool(forKey: "speakAloud")
         companionModel = d.string(forKey: "companionModel") ?? Provider.defaultCompanionModel
+        imageModel = d.string(forKey: "imageModel") ?? Provider.defaultImageModel
         companionPauseMs = d.double(forKey: "companionPauseMs")
         provider = Provider(rawValue: d.string(forKey: "provider") ?? "") ?? .nebius
         nebiusModel = d.string(forKey: "nebiusModel") ?? Provider.nebius.defaultModel
@@ -231,6 +236,18 @@ final class AppSettings: ObservableObject {
         case .local:
             LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel)
         }
+    }
+
+    /// Pictures always come from Token Factory, even when the words come from a local model.
+    var imageClient: ImageClient {
+        ImageClient(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: imageModel)
+    }
+
+    /// What the writer told Lina about themselves, plus what they asked it to remember.
+    var writerNotes: String {
+        let memory = MemoryStore.shared.promptText
+        guard !memory.isEmpty else { return aboutMe }
+        return aboutMe + "\n\nThings they asked you to remember, use them when they matter:\n" + memory
     }
 
     var isModelConfigured: Bool {

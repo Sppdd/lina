@@ -71,6 +71,10 @@ struct MenuBarView: View {
                     closeMenu()
                     WindowOpener.shared.settings()
                 }
+                MenuRow(title: "Report a Problem…", symbol: "ladybug", shortcut: nil) {
+                    closeMenu()
+                    WindowOpener.shared.open("report")
+                }
                 Divider().padding(.vertical, 4)
                 MenuRow(title: "Quit Lina", symbol: "power", shortcut: "⌘Q") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")

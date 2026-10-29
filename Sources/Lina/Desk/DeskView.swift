@@ -237,7 +237,7 @@ struct DeskEditor: NSViewRepresentable {
             guard Suggestion.isGoodMoment(before: before, after: after) else { return }
 
             let ctx = WritingContext(before: before, after: after, appName: "Lina Desk")
-            let messages = Prompts.continuation(ctx, voice: settings.voice, aboutMe: settings.aboutMe, length: settings.length)
+            let messages = Prompts.continuation(ctx, voice: settings.voice, aboutMe: settings.writerNotes, length: settings.length)
             let client = LLMClient(endpoint: settings.endpoint)
             let length = settings.length
             task?.cancel()

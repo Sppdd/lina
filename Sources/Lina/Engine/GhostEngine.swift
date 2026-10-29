@@ -63,6 +63,8 @@ final class GhostEngine: ObservableObject {
                 MainActor.assumeIsolated {
                     if let app, app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
                         self?.currentApp = (app.localizedName ?? "", app.bundleIdentifier ?? "")
+                        Diagnostics.lastApp = app
+                        Diagnostics.log("focus", "switched to \(app.localizedName ?? "?") (\(app.bundleIdentifier ?? "?"))")
                         self?.refreshStatus()
                         self?.onAppChanged?()
                     }
@@ -90,6 +92,7 @@ final class GhostEngine: ObservableObject {
         if trusted != isTrusted { isTrusted = trusted }
         if !trusted {
             // A tap made before access was revoked never works again; drop it so a fresh one is made later.
+            if status != .needsPermission { Diagnostics.log("permission", "Accessibility not granted") }
             monitor.stop()
             status = .needsPermission
             return
@@ -173,7 +176,7 @@ final class GhostEngine: ObservableObject {
         else { return }
 
         let ctx = snap.context()
-        let messages = Prompts.continuation(ctx, voice: settings.voice, aboutMe: settings.aboutMe,
+        let messages = Prompts.continuation(ctx, voice: settings.voice, aboutMe: settings.writerNotes,
                                             length: settings.length)
         let client = LLMClient(endpoint: settings.endpoint)
         let length = settings.length
@@ -210,6 +213,7 @@ final class GhostEngine: ObservableObject {
             } catch {
                 guard let self, gen == self.generation else { return }
                 self.reset()
+                Diagnostics.log("ghost", "error: \(error.localizedDescription)")
                 self.status = .error(error.localizedDescription)
                 self.quietUntil = Date().addingTimeInterval(15)
             }

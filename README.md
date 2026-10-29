@@ -29,7 +29,7 @@
 
 Most AI writing tools write *for* you. Lina writes *with* you.
 
-Lina is a menu bar app that reads along in **any app**: Notes, Mail, Journal, Safari, Obsidian. When you pause, a small popup appears just above your cursor and thinks with you. It tells you what it hears you saying, why you seem to be writing it, one question that takes you deeper, and a thread worth following. In **Understand** mode **it never types into your document**: you answer its question in the popup, and the conversation keeps going. Switch to **Edit** or **Auto** mode (`⇧⌥ Space`) and Lina rewrites each sentence you finish instead.
+Lina is a menu bar app that reads along in **any app**: Notes, Mail, Journal, Safari, Obsidian. When you pause, Lina writes in ink just above your cursor and thinks with you. It tells you what it hears you saying, why you seem to be writing it, one question that takes you deeper, and a thread worth following. In **Understand** mode **it never types into your document**: you answer its question (`⌥ Space` opens a reply box), and the conversation keeps going. Switch to **Edit** or **Auto** mode (`⇧⌥ Space`) and Lina rewrites each sentence you finish instead.
 
 Under the hood, Lina runs **NVIDIA Nemotron on Nebius Token Factory**: Nemotron 3 Super for the companion, Nemotron 3 Nano for fast ghost text. It can also run fully on your own Mac with Ollama, LM Studio or llama.cpp, so nothing leaves your machine.
 
@@ -48,10 +48,13 @@ Writing is how people think through the things that matter to them: a journal en
 
 | Feature | |
 |---|---|
-| **Companion (`⌥ Space`)** | A popup just above your cursor in any app. When you pause, Lina reads the whole draft and says what it hears, why you might be writing it, a question for you and a thread to follow. Reply in the popup to talk it through. `✦` reads again now. It steps aside as soon as you type, click elsewhere or press `esc`. |
+| **Companion** | When you pause, Lina reads the whole draft and writes what it hears and one question for you in an ink card just above your cursor, in any app. There's no window to look away to. It steps aside as soon as you type or press `esc`. `⌥ Space` opens a reply box to talk it through. With the ink drop off, Lina uses a popup instead. |
+| **`/lina` anywhere** | Type `/lina` and an instruction wherever you write, then press `↩`. "This" means the text before the command on its line, or else the paragraph above it. `/lina edit this paragraph` rewrites it in place, `/lina write a closing line` writes new text where the command was, `/lina turn this description to a photo` draws a picture and pastes it there, and `/lina remember this` saves it to memory. `⌘Z` undoes, and `esc` stops a command that's still running. |
+| **Memory (`⌃⌥ M`)** | Highlight text in any app and press `⌃⌥ M`, or type `/lina remember …`. Lina keeps these notes on your Mac and uses them whenever it writes or thinks with you. You can review and delete them in **Settings → Memory**. |
 | **Modes (`⇧⌥ Space`)** | Cycle like Claude Code's modes. **Understand** reads along and asks questions, and never edits. **Edit** offers a rewrite of each sentence you finish; `⇥` takes it, `esc` keeps yours. **Auto** rewrites each sentence you finish in place, and `⌘Z` undoes it. In Edit or Auto, `⌥ Space` rewrites the sentence at the cursor right away, even an unfinished one. |
-| **Ink drop** | A drop of Lina's ink rides just above your text cursor in any app. It breathes while it rests, swirls while Lina thinks and becomes a waveform while it listens. When Lina finds a thread worth following, the drop flies to those words in your draft and underlines them. **Show me where** in the popup does it again. |
+| **Ink drop** | A drop of Lina's ink rides just above your text cursor in any app, and Lina's cards, rewrites and notes are written beside it. It breathes while it rests, swirls while Lina thinks and becomes a waveform while it listens. When Lina finds a thread worth following, the drop flies to those words in your draft and underlines them. **Show me where** in the popup does it again. |
 | **Hold `⌃⌥` to talk** | Speak instead of typing. In Understand you answer Lina's question; in Edit and Auto you say how to rewrite the sentence at your cursor ("make it warmer"). Speech is recognized on your Mac when your language supports it. Lina can also read its questions aloud (off by default). |
+| **Report a problem** | Hard to describe what went wrong? Type `/lina bug` and a few words right where it happened, or pick **Report a Problem…** in the menu bar. Lina writes a report from what it saw (your setup, the text field in front of you, and its recent decisions and errors), copies it, and saves it to `~/Library/Logs/Lina/reports/latest.md`. Reports never include your document's text. |
 | **Ghost text** *(optional)* | A context-aware continuation appears at the caret in any app after a natural pause, never mid-word. `⇥` keeps it, `⌥⇥` keeps one word, `esc` or typing dismisses it. |
 | **Rewrite palette** | A Spotlight-style palette with **Keep going**, **Find the word**, **Fix grammar**, **Say it clearer**, **Give it feeling**, **Tighten**, **I'm stuck**, **Look it up**, or any instruction you type. `↩` replaces, `⌘↩` inserts after. |
 | **The Desk** | A calm serif writing space with inline ghost text, typewriter scrolling and a focus mode. Pages are plain Markdown files. |
@@ -101,6 +104,7 @@ NEBIUS_API_KEY=… .build/debug/Lina --selftest            # Nebius / Nemotron
 |---|---|---|
 | Companion | [`nvidia/nemotron-3-super-120b-a12b`](https://tokenfactory.nebius.com) | Reads the full draft and returns a structured reflection (what, why, question, thread), then carries the conversation. |
 | Ghost text & palette | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Low-latency continuations and rewrites at the caret. |
+| Pictures | `black-forest-labs/flux-schnell` | `/lina … photo`: the companion model turns your words into an image prompt, then Token Factory's `/images/generations` draws it with the same API key. |
 
 Lina talks to Nebius Token Factory through its OpenAI-compatible `/chat/completions` endpoint and streams every response. Nemotron's reasoning mode is turned off (`/no_think`, `enable_thinking: false`), and any `<think>` spans are filtered out of the stream, so text appears as fast as you pause. You can switch models from **Settings → Model**.
 
@@ -147,7 +151,9 @@ The ink drop, pointing and hold-to-talk are adapted from [Clicky](https://github
 
 - Lina never reads password fields or secure input, and you can turn it off per app.
 - There's no account, telemetry or analytics. Your API key is stored in `~/Library/Application Support/Lina/secrets.json`, which only your user account can read (mode 0600). Lina doesn't use the Keychain: an ad-hoc-signed build would set off a Keychain permission prompt after every rebuild.
-- Text goes only to the endpoint you choose. With **On this Mac**, nothing leaves your machine.
+- Text goes only to the endpoint you choose. With **On this Mac**, nothing leaves your machine, except a `/lina … photo` request, which always goes to Token Factory.
+- Lina keeps a log of its own decisions in `~/Library/Logs/Lina/lina.log` to help explain problems. It records app names, lengths and errors, never what you write.
+- Memory lives in `~/Library/Application Support/Lina/memory.json` (mode 0600). Pictures are saved to `~/Pictures/Lina`.
 
 ## Develop
 

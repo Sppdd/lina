@@ -8,6 +8,7 @@ struct SettingsView: View {
             GeneralSettings(engine: engine).tabItem { Label("General", systemImage: "gearshape") }
             ModelSettings().tabItem { Label("Model", systemImage: "cpu") }
             VoiceSettings().tabItem { Label("Voice", systemImage: "text.quote") }
+            MemorySettings().tabItem { Label("Memory", systemImage: "brain") }
             AppsSettings().tabItem { Label("Apps", systemImage: "square.grid.2x2") }
             PrivacySettings().tabItem { Label("Privacy", systemImage: "lock") }
         }
@@ -25,7 +26,7 @@ private struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Think with me in a popup above the cursor", isOn: $settings.companionEnabled)
+                Toggle("Think with me above the cursor", isOn: $settings.companionEnabled)
                 Picker("Mode", selection: $settings.companionMode) {
                     ForEach(CompanionMode.allCases) { mode in
                         Text("\(mode.title) — \(mode.blurb)").tag(mode)
@@ -44,7 +45,7 @@ private struct GeneralSettings: View {
             } header: {
                 Text("Companion")
             } footer: {
-                Text("Understand: Lina tells you what it hears, why you might be writing it, and a question to take it further. It never types into your document. Edit and Auto rewrite each sentence you finish: Edit asks first (⇥ takes it), Auto just does it (⌘Z undoes). \(settings.hotKey.modeTitle) cycles the modes.")
+                Text("Lina writes in ink just above your cursor. Understand: it tells you what it hears and a question to take it further, and never types into your document. Edit and Auto rewrite each sentence you finish: Edit asks first (⇥ takes it), Auto just does it (⌘Z undoes). \(settings.hotKey.modeTitle) cycles the modes.")
                     .foregroundStyle(.secondary)
             }
 
@@ -77,8 +78,8 @@ private struct GeneralSettings: View {
                 Text("Presence")
             } footer: {
                 Text(VoiceInput.isAvailable
-                     ? "The drop breathes beside your cursor, swirls while Lina thinks, and points at the words worth following. Hold ⌃⌥ and speak to answer Lina, or in Edit and Auto, to say how to rewrite the sentence. Speech is recognized on this Mac when your language supports it."
-                     : "The drop breathes beside your cursor, swirls while Lina thinks, and points at the words worth following. Talking needs the app bundle: build it with scripts/build-app.sh.")
+                     ? "The drop rides beside your cursor, writes what Lina thinks just above it, swirls while Lina works, and points at the words worth following. With it off, Lina uses a popup. Hold ⌃⌥ and speak to answer Lina, or in Edit and Auto, to say how to rewrite the sentence. Speech is recognized on this Mac when your language supports it."
+                     : "The drop rides beside your cursor, writes what Lina thinks just above it, swirls while Lina works, and points at the words worth following. Talking needs the app bundle: build it with scripts/build-app.sh.")
                     .foregroundStyle(.secondary)
             }
 
@@ -89,6 +90,13 @@ private struct GeneralSettings: View {
                 .onChange(of: settings.hotKey) { _, k in HotKeyCenter.shared.register(k) }
                 LabeledContent("Switch mode") { KeyCap(settings.hotKey.modeTitle, size: 12) }
                 LabeledContent("Talk to Lina (hold)") { KeyCap("⌃⌥", size: 12) }
+                LabeledContent("Remember the highlighted text") { KeyCap(HotKeyCenter.memoryTitle, size: 12) }
+                LabeledContent("Ask Lina right where you write") {
+                    HStack(spacing: 4) {
+                        Text("/lina edit this").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                        KeyCap("return", size: 12)
+                    }
+                }
                 LabeledContent("Use Lina's rewrite (Edit)") { KeyCap("tab", size: 12) }
                 LabeledContent("Keep suggestion") { KeyCap("tab", size: 12) }
                 LabeledContent("Keep one word") { HStack(spacing: 4) { KeyCap("⌥", size: 12); KeyCap("tab", size: 12) } }
@@ -154,13 +162,14 @@ struct ModelSettings: View {
                         .onChange(of: keyDraft) { _, _ in if testState != .testing { testState = .idle } }
                     modelPicker("Companion", selection: $settings.companionModel)
                     modelPicker("Ghost text", selection: $settings.nebiusModel)
+                    TextField("Pictures", text: $settings.imageModel, prompt: Text(Provider.defaultImageModel))
                 } header: {
                     Text("Nebius Token Factory")
                 } footer: {
                     HStack {
                         Link("Get an API key →", destination: URL(string: "https://tokenfactory.nebius.com/")!)
                         Spacer()
-                        Text("Defaults: NVIDIA Nemotron 3 Super thinks with you; Nemotron 3 Nano keeps up with ghost text.")
+                        Text("Defaults: Nemotron 3 Super thinks with you, Nemotron 3 Nano keeps up with ghost text, and FLUX schnell draws for /lina … photo.")
                             .foregroundStyle(.secondary)
                     }
                     .font(.caption)
@@ -275,6 +284,47 @@ struct VoiceSettings: View {
                 Text("About you and how you write")
             } footer: {
                 Text("Optional. e.g. “I'm a nurse writing a memoir. I like short sentences and plain words. British spelling.”")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(height: 520)
+    }
+}
+
+// MARK: Memory
+
+struct MemorySettings: View {
+    @ObservedObject var memory = MemoryStore.shared
+
+    var body: some View {
+        Form {
+            Section {
+                if memory.items.isEmpty {
+                    Text("Nothing yet.").foregroundStyle(.secondary)
+                }
+                ForEach(memory.items) { item in
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.text).font(Theme.serif(13)).lineLimit(4).textSelection(.enabled)
+                            Text("\(item.source) · \(item.date.formatted(date: .abbreviated, time: .omitted))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { memory.remove(item.id) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                            .help("Forget this")
+                    }
+                    .padding(.vertical, 2)
+                }
+            } header: {
+                HStack {
+                    Text("What Lina remembers")
+                    Spacer()
+                    if !memory.items.isEmpty { Button("Forget all") { memory.removeAll() }.buttonStyle(.borderless) }
+                }
+            } footer: {
+                Text("Highlight text anywhere and press \(HotKeyCenter.memoryTitle), or type “/lina remember …” and press return. Lina keeps these on this Mac and uses them whenever it writes or thinks with you.")
                     .foregroundStyle(.secondary)
             }
         }

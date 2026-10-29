@@ -5,6 +5,21 @@ import SwiftUI
 /// so the writer can tell what Lina is up to without opening anything.
 enum InkState: Equatable { case resting, thinking, listening, pointing }
 
+/// What Lina has to say, written in ink just above the cursor: its reading of the draft,
+/// a rewrite to take or leave, or the `/lina` command it's working on.
+struct InkCard: Equatable {
+    /// A small label on top: "lina hears", "rewrite", "/lina edit this".
+    var eyebrow: String
+    var text: String
+    /// A second, stronger line: Lina's question.
+    var detail = ""
+    /// The writer's words being replaced, struck through above a rewrite.
+    var original = ""
+    /// Keys that act on the card: "⇥ use it · esc keep mine".
+    var hint = ""
+    var streaming = false
+}
+
 @MainActor
 final class InkModel: ObservableObject {
     @Published var state: InkState = .resting
@@ -16,6 +31,11 @@ final class InkModel: ObservableObject {
     @Published var flightScale: CGFloat = 1
     /// Which way the drop's tip points, in degrees clockwise from straight up.
     @Published var tilt: Double = InkBuddy.restingTilt
+    @Published var card: InkCard?
+    /// Not enough room above the caret (top of the screen): the card hangs below it instead.
+    @Published var cardBelow = false
+    /// Moves the card left so it stays on screen when the caret is near the right edge.
+    @Published var cardShift: CGFloat = 0
 }
 
 /// Lina's presence beside the writer: a drop of ink riding just above the text cursor, in any app.
@@ -23,10 +43,14 @@ final class InkModel: ObservableObject {
 /// It's Lina's take on Clicky's cursor buddy. Clicky follows the mouse; Lina follows the caret,
 /// because a writer's eyes are on where the words are going. The drop breathes while it rests,
 /// swirls while Lina thinks, turns into a waveform while it listens, and can fly to a phrase in
-/// the draft and underline it.
+/// the draft and underline it. What Lina thinks is written in a card just above the drop, so there's
+/// no separate window to read.
 @MainActor
 final class InkBuddy {
-    static let size = CGSize(width: 280, height: 40)
+    /// Big enough for the card above or below the drop, and to its left near the screen edge. Clear and click-through.
+    static let size = CGSize(width: 760, height: 460)
+    static let cardWidth: CGFloat = 340
+    static let cardRoom: CGFloat = 210
     /// Tip pointing down and left, at the caret it sits beside.
     static let restingTilt = -135.0
 
@@ -45,11 +69,31 @@ final class InkBuddy {
     }
 
     var isVisible: Bool { panel.isVisible }
+    var hasCard: Bool { model.card != nil }
+    /// A note is being typed or still showing beside the drop.
+    var isSaying: Bool { !model.bubble.isEmpty }
+
+    func show(_ card: InkCard) {
+        if model.card == nil {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { model.card = card }
+        } else {
+            model.card = card
+        }
+    }
+
+    func clearCard() {
+        guard model.card != nil else { return }
+        withAnimation(.easeOut(duration: 0.2)) { model.card = nil }
+    }
 
     /// Moves the drop to ride beside a caret, trailing it a little like a pen behind the words.
     func follow(_ caret: CGRect) {
         let point = CGPoint(x: caret.maxX + 8, y: caret.maxY + 4)
         home = point
+        if let screen = (NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.main)?.visibleFrame {
+            model.cardBelow = screen.maxY - point.y < Self.cardRoom
+            model.cardShift = min(0, screen.maxX - 12 - (point.x - 6 + Self.cardWidth))
+        }
         guard !isPointing else { return }
         let origin = clamped(origin(for: point))
         if !panel.isVisible {
@@ -181,11 +225,14 @@ final class InkBuddy {
                 y: dropCenter.y - (Self.size.height - InkBuddyView.dropCenter.y))
     }
 
+    /// Keeps the drop itself on screen; the clear panel around it may hang off the edges.
     private func clamped(_ origin: CGPoint) -> CGPoint {
-        let frame = CGRect(origin: origin, size: Self.size)
-        guard let vf = (NSScreen.screens.first { $0.frame.intersects(frame) } ?? NSScreen.main)?.frame else { return origin }
-        return CGPoint(x: max(vf.minX, min(origin.x, vf.maxX - 24)),
-                       y: max(vf.minY, min(origin.y, vf.maxY - Self.size.height)))
+        let c = InkBuddyView.dropCenter
+        let drop = CGPoint(x: origin.x + c.x, y: origin.y + Self.size.height - c.y)
+        guard let vf = (NSScreen.screens.first { $0.frame.contains(drop) } ?? NSScreen.main)?.frame else { return origin }
+        let x = max(vf.minX + 10, min(drop.x, vf.maxX - 12))
+        let y = max(vf.minY + 10, min(drop.y, vf.maxY - 10))
+        return self.origin(for: CGPoint(x: x, y: y))
     }
 }
 
@@ -259,7 +306,7 @@ private struct UnderlineView: View {
 
 struct InkBuddyView: View {
     /// Where the drop's center sits inside the panel (SwiftUI coordinates, top-left origin).
-    static let dropCenter = CGPoint(x: 14, y: 22)
+    static let dropCenter = CGPoint(x: 380, y: 230)
     @ObservedObject var model: InkModel
     @State private var breathing = false
 
@@ -298,12 +345,73 @@ struct InkBuddyView: View {
                     .offset(x: Self.dropCenter.x + 14, y: Self.dropCenter.y - 11)
                     .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: .leading)))
             }
+
+            if let card = model.card, model.state != .pointing {
+                InkCardView(card: card)
+                    .frame(width: InkBuddy.cardWidth, height: InkBuddy.cardRoom - 14,
+                           alignment: model.cardBelow ? .topLeading : .bottomLeading)
+                    .offset(x: Self.dropCenter.x - 6 + model.cardShift,
+                            y: model.cardBelow ? Self.dropCenter.y + 16 : Self.dropCenter.y - InkBuddy.cardRoom)
+                    .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: model.cardBelow ? .topLeading : .bottomLeading)))
+            }
         }
         .frame(width: InkBuddy.size.width, height: InkBuddy.size.height, alignment: .topLeading)
         .animation(.spring(response: 0.35, dampingFraction: 0.6), value: model.bubble.isEmpty)
         .onAppear {
             withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathing = true }
         }
+    }
+}
+
+/// Lina's words in ink, just above the cursor.
+private struct InkCardView: View {
+    let card: InkCard
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                Text(card.eyebrow.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .kerning(0.6)
+                    .lineLimit(1)
+                if card.streaming { ProgressView().controlSize(.mini).tint(Theme.paper) }
+            }
+            .foregroundStyle(Theme.paper.opacity(0.6))
+            if !card.original.isEmpty {
+                Text(card.original)
+                    .font(Theme.serif(12))
+                    .strikethrough(true, color: Theme.paper.opacity(0.5))
+                    .foregroundStyle(Theme.paper.opacity(0.5))
+                    .lineLimit(3)
+            }
+            if !card.text.isEmpty {
+                Text(card.text)
+                    .font(Theme.serif(14))
+                    .foregroundStyle(Theme.paper)
+                    .lineLimit(6)
+            }
+            if !card.detail.isEmpty {
+                Text(card.detail)
+                    .font(Theme.serif(14, weight: .semibold))
+                    .foregroundStyle(Theme.paper)
+                    .lineLimit(4)
+            }
+            if !card.hint.isEmpty {
+                Text(card.hint)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Theme.paper.opacity(0.6))
+                    .padding(.top, 1)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Theme.ink)
+                .shadow(color: Theme.ink.opacity(0.45), radius: 10, y: 2)
+        )
+        .animation(.easeOut(duration: 0.15), value: card)
     }
 }
 

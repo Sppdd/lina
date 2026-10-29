@@ -56,6 +56,26 @@ enum Snapshots {
                        to: dir.appendingPathComponent("\(name)\(suffix).png"))
             }
 
+            let cards: [(String, InkCard)] = [
+                ("ink-card", InkCard(eyebrow: "lina hears",
+                                     text: "You're trying to reach your father, but the letter keeps turning into a report.",
+                                     detail: "What did you want to carry for him that he wouldn't let you?",
+                                     hint: "⌥ Space to reply · hold ⌃⌥ to talk · esc")),
+                ("ink-rewrite", InkCard(eyebrow: "rewrite",
+                                        text: "I don't know why I keep putting off calling him; it's not as if he's going anywhere.",
+                                        original: "i dont know why i keep putting off calling him, its not like hes going anywhere.",
+                                        hint: "⇥ use it · esc keep mine")),
+                ("ink-command", InkCard(eyebrow: "/lina turn this description to a photo", text: "drawing it…",
+                                        hint: "A narrow kitchen at dawn, steam rising from a kettle, soft window light", streaming: true)),
+            ]
+            for (name, card) in cards {
+                let ink = InkModel(); ink.state = card.streaming ? .thinking : .resting; ink.card = card
+                render(InkBuddyView(model: ink).background(Theme.paper), size: InkBuddy.size, dark: dark,
+                       to: dir.appendingPathComponent("\(name)\(suffix).png"))
+            }
+            render(ReportView().background(Theme.paper), size: nil, dark: dark, to: dir.appendingPathComponent("report\(suffix).png"))
+            render(MemorySettings(), size: CGSize(width: 560, height: 520), dark: dark, to: dir.appendingPathComponent("settings-memory\(suffix).png"))
+
             let ghost = GhostModel(); ghost.text = " and only the drip from the awning echoed softly."; ghost.fontSize = 14
             render(GhostView(model: ghost), size: nil, dark: dark, to: dir.appendingPathComponent("ghost\(suffix).png"))
 

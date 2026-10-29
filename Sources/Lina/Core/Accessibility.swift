@@ -150,6 +150,50 @@ enum AX {
         return cocoa(ax)
     }
 
+    /// What Lina can see of the focused field right now, for problem reports. No text, only its shape.
+    @MainActor static func describeFocus() -> String {
+        guard var app = NSWorkspace.shared.frontmostApplication else { return "- No app in front." }
+        let me = ProcessInfo.processInfo.processIdentifier
+        var note: String?
+        if app.processIdentifier == me, let last = Diagnostics.lastApp, !last.isTerminated {
+            app = last
+            note = "- (Lina's own window was in front; this is the app used just before.)"
+        }
+        var out = ["- App: \(app.localizedName ?? "?") (\(app.bundleIdentifier ?? "no bundle id"))"] + [note].compactMap { $0 }
+        if app.processIdentifier == me {
+            out.append("- Lina itself is in front, so this says nothing about the app you were writing in.")
+            if let tv = DeskRegistry.shared.textView, tv.window?.isVisible == true {
+                out.append("- Desk open: \((tv.string as NSString).length) characters, selection \(tv.selectedRange())")
+            }
+            return out.joined(separator: "\n")
+        }
+        guard isTrusted else { return (out + ["- Accessibility isn't granted, so Lina can't see the field."]).joined(separator: "\n") }
+        if note == nil, IsSecureEventInputEnabled() { out.append("- Secure input is on (a password field or a terminal asked for it): Lina is blind here.") }
+        let appEl = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetMessagingTimeout(appEl, 0.5)
+        guard let focused: AXUIElement = copy(appEl, kAXFocusedUIElementAttribute) else {
+            return (out + ["- No focused element reported. The app may not support Accessibility, or no text field is focused."]).joined(separator: "\n")
+        }
+        let role: String = copy(focused, kAXRoleAttribute) ?? "?"
+        let subrole: String = copy(focused, kAXSubroleAttribute) ?? "none"
+        var settable: DarwinBoolean = false
+        AXUIElementIsAttributeSettable(focused, kAXValueAttribute as CFString, &settable)
+        out.append("- Focused element: role \(role), subrole \(subrole), value settable: \(settable.boolValue)")
+        let value: String? = copy(focused, kAXValueAttribute)
+        out.append("- Text: \(value.map { "\(($0 as NSString).length) characters" } ?? "not readable")")
+        if let rv: AXValue = copy(focused, kAXSelectedTextRangeAttribute) {
+            var cf = CFRange()
+            AXValueGetValue(rv, .cfRange, &cf)
+            out.append("- Selection: location \(cf.location), length \(cf.length)")
+            let caret = caretRect(focused, at: cf.location, textLength: Int.max)
+            out.append("- Caret on screen: \(caret.map { "\(Int($0.minX)), \(Int($0.minY)), height \(Int($0.height))" } ?? "not reported (the ink drop can't follow it here)")")
+        } else {
+            out.append("- Selection: not reported")
+        }
+        if note == nil { out.append("- Lina's full read: \(snapshot(requireCaret: false) == nil ? "fails" : "works")") }
+        return out.joined(separator: "\n")
+    }
+
     // MARK: Internals
 
     private static func copy<T>(_ el: AXUIElement, _ attr: String) -> T? {

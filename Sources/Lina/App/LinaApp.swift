@@ -31,6 +31,12 @@ struct LinaApp: App {
             }
         }
 
+        Window("Report a Problem", id: "report") {
+            ReportView()
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
         Window("Welcome to Lina", id: "welcome") {
             OnboardingView(engine: delegate.engine)
         }
@@ -107,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         palette.deskTargetProvider = { DeskRegistry.shared.activeTarget }
         HotKeyCenter.shared.handler = { [weak self] in self?.companion.toggle() }
         HotKeyCenter.shared.modeHandler = { [weak self] in self?.companion.cycleMode() }
+        HotKeyCenter.shared.memoryHandler = { [weak self] in self?.companion.rememberSelection() }
         HotKeyCenter.shared.register(AppSettings.shared.hotKey)
 
         engine.onTyped = { [weak self] in self?.companion.writerTyped() }
