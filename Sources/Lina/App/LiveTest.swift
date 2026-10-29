@@ -46,11 +46,13 @@ enum LiveTest {
             say("Typing a sentence with mistakes…")
             engine.dismiss()
             await typeAsUser(sentence)
-            if let snap = AX.snapshot(requireCaret: false), (snap.text as String) == sentence {
+            let snap = AX.snapshot(requireCaret: false)
+            if let snap, (snap.text as String) == sentence {
                 ready = true
                 break
             }
-            say("Attempt \(attempt): keystrokes didn't all land, retrying")
+            let got = (snap?.text as String?) ?? "(unreadable)"
+            say("Attempt \(attempt): keystrokes didn't all land in “\(snap?.windowTitle ?? "?")”: got \(got.count) chars “\(got.prefix(60))”, retrying")
             closeDocument()
         }
         guard ready else { say("Could not get a clean TextEdit document"); return false }
@@ -155,9 +157,10 @@ enum LiveTest {
     }
 
     /// Opens a new TextEdit document and waits until its empty text view has focus, stably.
+    /// The focused window must be that document: an empty search field (TextEdit's Open panel) also reads as empty.
     private static func freshDocument() async -> Bool {
-        let file = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("lina-livetest-\(UUID().uuidString.prefix(6)).txt")
+        let name = "lina-livetest-\(UUID().uuidString.prefix(6))"
+        let file = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(name + ".txt")
         try? "".write(to: file, atomically: true, encoding: .utf8)
         tempFiles.append(file)
         NSWorkspace.shared.open([file], withApplicationAt: URL(fileURLWithPath: "/System/Applications/TextEdit.app"),
@@ -166,7 +169,7 @@ enum LiveTest {
         for _ in 0..<40 {
             try? await Task.sleep(for: .milliseconds(150))
             NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").first?.activate()
-            if textEditInFront, let s = AX.snapshot(requireCaret: false), s.text.length == 0 {
+            if textEditInFront, let s = AX.snapshot(requireCaret: false), s.text.length == 0, s.windowTitle.contains(name) {
                 stable += 1
                 if stable >= 3 { return true }
             } else {
