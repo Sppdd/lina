@@ -147,4 +147,5 @@ She appears in the menu bar, on every card, in tips, in onboarding and in her wi
 - The illustration is vector art drawn in code. A hand-drawn set by an illustrator would raise the quality further.
 - Skills and plug-ins are shown as planned, not built.
 - The images in `docs/screenshots` show the first version; regenerate them with `--snapshots` on a Mac.
-- The app icon still shows the old "l" mark.
+- The app icon is now Lina's face (`scripts/make-icon.swift`). In an existing checkout, delete `build/AppIcon.icns` so the build script draws it again.
+- Nothing here has been compiled yet: this environment has no Swift toolchain, and the macOS GitHub Actions job couldn't get a runner. Run `swift build && swift test` on a Mac first.

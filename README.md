@@ -143,7 +143,7 @@ swift test                                        # unit tests
 ## Roadmap
 
 - Skills and plug-ins: `/lina cite`, `/lina translate`, a team style guide, Notion and Google Docs search
-- A hand-drawn illustration set for Lina, and a new app icon
+- A hand-drawn illustration set for Lina
 - Signed, notarized release builds
 - Intel Mac support
 

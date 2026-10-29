@@ -247,6 +247,14 @@ private struct SavedPage: View {
         }
     }
 
+    private var emptyTitle: String { history.items.isEmpty ? "Nothing saved yet" : "No matches" }
+
+    private var emptyDetail: String {
+        history.items.isEmpty
+            ? "Ask Lina something with /lina in any app. Searches, questions, rewrites and pictures appear here."
+            : "Try other words."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
@@ -277,11 +285,7 @@ private struct SavedPage: View {
                 .frame(width: 140)
             }
             if shown.isEmpty {
-                ContentUnavailableView(history.items.isEmpty ? "Nothing saved yet" : "No matches",
-                                       systemImage: "tray",
-                                       description: Text(history.items.isEmpty
-                                           ? "Ask Lina something with /lina in any app. Searches, questions, rewrites and pictures appear here."
-                                           : "Try other words."))
+                ContentUnavailableView(emptyTitle, systemImage: "tray", description: Text(emptyDetail))
                     .frame(maxWidth: .infinity, minHeight: 280)
             } else {
                 LazyVStack(alignment: .leading, spacing: 10) {
