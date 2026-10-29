@@ -4,7 +4,7 @@
 <p align="center"><strong>Write with someone beside you.</strong></p>
 
 <p align="center">
-  An open-source, private AI writing companion for macOS: it reads along in any app and thinks with you.
+  An open-source writing helper for macOS. Lina lives at your cursor in every app and speaks only when you ask.
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="#install">Install</a> ·
-  <a href="#what-lina-does">Features</a> ·
+  <a href="#what-lina-does">Commands</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#nebius--nvidia">Nebius × NVIDIA</a> ·
   <a href="#privacy">Privacy</a> ·
@@ -27,41 +27,36 @@
 
 ---
 
-Most AI writing tools write *for* you. Lina writes *with* you.
+Most AI writing tools interrupt you. Lina waits.
 
-Lina is a menu bar app that reads along in **any app**: Notes, Mail, Journal, Safari, Obsidian. When you pause, a small floating window thinks with you. It tells you what it hears you saying, why you seem to be writing it, one question that takes you deeper, and a thread worth following. **It never types into your document.** You answer its question in the window, and the conversation keeps going.
+Type `/lina` in **any app** (Notes, Mail, Slack, a browser) and finish with a comma or a dot. A small card appears under your line with what you asked for: a fact from the web worded to fit your sentence, a question that makes you think, three rewrites, a fixed sentence, or a picture. **Nothing goes into your text until you press ⌘1, ⌘2 or ⌘3.** Esc leaves your words exactly as they were.
 
-Under the hood, Lina runs **NVIDIA Nemotron on Nebius Token Factory**: Nemotron 3 Super for the companion, Nemotron 3 Nano for fast ghost text. It can also run fully on your own Mac with Ollama, LM Studio or llama.cpp, so nothing leaves your machine.
+When you end a sentence with a dot, Lina quietly checks it for typos and grammar. If she finds something, she underlines it and offers a fix. If not, you never notice her.
 
-<p align="center"><img src="docs/screenshots/companion.png" width="360" alt="Lina's companion window thinking with the writer"></p>
+<p align="center"><img src="docs/lina-moods.png" width="760" alt="Lina's seven moods: ready, listening, thinking, found something, done, needs you, paused"></p>
 
-## Why Personal AI
+Lina is a character. Her hair color and face tell you what she's doing, in the menu bar and on every card: violet when ready, blue while you type `/lina`, lavender while she thinks, amber when a card is waiting, green when your choice went in, red when she needs you, grey when paused.
 
-Writing is how people think through the things that matter to them: a journal entry, a letter to a parent, a hard email, an essay they've been putting off. Lina is built for that personal writing:
-
-- **It lives where you already write.** Lina works across every app you use and doesn't ask you to move into a new editor.
-- **It's about you, not the output.** Lina asks questions and reflects your meaning back to you. It doesn't hand you paragraphs to paste.
-- **It learns your voice.** Pick Journal, Essay, Research, Story or Work, and tell Lina a little about how you write.
-- **It's yours.** There's no account and no analytics. Stats live on your Mac, and you can switch to a local model for complete privacy.
+Under the hood: **NVIDIA Nemotron on Nebius Token Factory** for checks and commands, **FLUX** on Token Factory for pictures, and **Google Gemini with Search grounding** for live answers. Commands can also run on a model on your own Mac.
 
 ## What Lina does
 
-| Feature | |
+| Type this | Lina does this |
 |---|---|
-| **Companion (`⌥ Space`)** | A floating window beside any app. When you pause, Lina reads the whole draft and says what it hears, why you might be writing it, a question for you and a thread to follow. Reply in the window to talk it through. `✦` reads again now. |
-| **Ghost text** *(optional)* | A context-aware continuation appears at the caret in any app after a natural pause, never mid-word. `⇥` keeps it, `⌥⇥` keeps one word, `esc` or typing dismisses it. |
-| **Rewrite palette** | A Spotlight-style palette with **Keep going**, **Find the word**, **Fix grammar**, **Say it clearer**, **Give it feeling**, **Tighten**, **I'm stuck**, **Look it up**, or any instruction you type. `↩` replaces, `⌘↩` inserts after. |
-| **The Desk** | A calm serif writing space with inline ghost text, typewriter scrolling and a focus mode. Pages are plain Markdown files. |
-| **Daily rhythm** | A word goal, a progress ring and a streak in the menu bar, all stored only on your Mac. |
-| **Private by design** | Lina never reads password fields or secure input. You can turn it off per app, and the “On this Mac” mode keeps everything local. |
+| A sentence ending in `.` `?` `!` | Checks it. Mistakes are underlined; ⌘1 fixes them, ⌘2 fixes and smooths. |
+| `The final ended /lina who won and how,` | Searches the web. ⌘1 replaces the question with an answer that fits: *"…ended with Argentina beating France on penalties,"*. ⌘2 adds the source. |
+| `/lina.` | One short question about what you just wrote. |
+| `/lina fix.` | Checks the whole paragraph. |
+| `/lina rewrite polite.` | Three rewrites of the paragraph in that tone; pick with ⌘1–⌘3. |
+| `/lina edit make it shorter.` | The paragraph, changed the way you asked. |
+| `/lina model` | Every writing and image model on Token Factory; switch with ⌘1–⌘9. |
+| `/lina image a reading nook at dusk, watercolor.` | A picture; ⌘1 drops it into your text. |
+| `/lina saved` · `/lina help` | Opens Saved · lists the commands. |
+| `⌥ Space` | Same as `/lina`, without typing it. |
 
-<p align="center">
-  <img src="docs/screenshots/desk.png" width="720" alt="The Desk">
-</p>
-<p align="center">
-  <img src="docs/screenshots/palette-result.png" width="420" alt="Rewrite palette: Give it feeling">
-  <img src="docs/screenshots/palette-words-dark.png" width="420" alt="Rewrite palette: Find the word (dark)">
-</p>
+The first time you use each part, a small tip appears under your own text with a `^` pointing at it.
+
+**Lina's window** (click the menu bar face → Open Lina) has animated demos of six use cases, everything she has saved (searches with sources, questions, rewrites, pictures), and the models behind her. The full design is in [docs/REDESIGN.md](docs/REDESIGN.md).
 
 ## Install
 
@@ -72,88 +67,84 @@ git clone https://github.com/Sppdd/lina.git && cd lina
 scripts/build-app.sh --open      # builds build/Lina.app and launches it
 ```
 
-To keep Lina, move `build/Lina.app` to `/Applications`. On first launch, onboarding walks you through three steps:
+On first launch, onboarding walks you through:
 
-1. **Accessibility access.** Lina needs it to read the field you're typing in and find your cursor (System Settings → Privacy & Security → Accessibility).
-2. **A model.**
-   - **Nebius Token Factory (default).** Paste an API key from [tokenfactory.nebius.com](https://tokenfactory.nebius.com). If you build from source, you can instead create a `.env` file at the repo root containing `NEBIUS_API_KEY=…`.
-   - **On this Mac.** Run `ollama serve` and `ollama pull llama3.2` (or pull any other model), then point Lina at `http://localhost:11434/v1`.
-3. **Your voice and daily goal.**
+1. **Accessibility access**, so Lina can read the line you're typing when you ask (System Settings → Privacy & Security → Accessibility).
+2. **Keys.** Paste them in onboarding or Settings, or put them in a `.env` file at the repo root:
+   ```sh
+   NEBIUS_API_KEY=…    # tokenfactory.nebius.com: checks, commands, /lina model, /lina image
+   GEMINI_API_KEY=…    # aistudio.google.com/apikey: live web answers (optional)
+   ```
+   To keep commands on your Mac, choose **On this Mac** and run `ollama serve` with `ollama pull llama3.2`.
+3. **A practice page.** Lina opens one in TextEdit with things to try.
 
 > `scripts/build-app.sh` signs Lina with a requirement pinned to its bundle ID, so the Accessibility permission survives rebuilds. If Lina still says access is missing, click **Grant Access** in the menu bar or in Settings.
 
-### Check a model from the terminal
+### Check the models from the terminal
 
 ```sh
 swift build
-NEBIUS_API_KEY=… .build/debug/Lina --selftest            # Nebius / Nemotron
-.build/debug/Lina --selftest --companion                 # one companion reflection
-.build/debug/Lina --selftest --local llama3.2            # local Ollama model
-.build/debug/Lina --selftest --models                    # list models on your endpoint
+.build/debug/Lina --selftest                               # sentence check, /lina question, rewrites
+.build/debug/Lina --selftest --search "who won the 2022 World Cup"
+.build/debug/Lina --selftest --models                      # writing and image models on Token Factory
+.build/debug/Lina --selftest --image "a red fox in snow" fox.png
+.build/debug/Lina --selftest --local llama3.2              # a local Ollama model
 ```
 
 ## Nebius × NVIDIA
 
 | | Model | Role |
 |---|---|---|
-| Companion | [`nvidia/nemotron-3-super-120b-a12b`](https://tokenfactory.nebius.com) | Reads the full draft and returns a structured reflection (what, why, question, thread), then carries the conversation. |
-| Ghost text & palette | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Low-latency continuations and rewrites at the caret. |
+| Commands | [`nvidia/nemotron-3-super-120b-a12b`](https://tokenfactory.nebius.com) | `/lina` questions, rewrites, edits. Switch with `/lina model`. |
+| Sentence checks | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Fast proofreading of each finished sentence, as JSON. |
+| Pictures | `black-forest-labs/flux-schnell` | `/lina image`. |
+| Web answers | Google `gemini-2.5-flash` + Search grounding | Questions after `/lina`, with sources. |
 
-Lina talks to Nebius Token Factory through its OpenAI-compatible `/chat/completions` endpoint and streams every response. Nemotron's reasoning mode is turned off (`/no_think`, `enable_thinking: false`), and any `<think>` spans are filtered out of the stream, so text appears as fast as you pause. You can switch models from **Settings → Model**.
+Lina talks to Token Factory through its OpenAI-compatible endpoints (`/chat/completions`, `/images/generations`, `/models`). Nemotron's reasoning mode is turned off (`/no_think`, `enable_thinking: false`) and any `<think>` spans are filtered out, so answers come back fast.
 
 ## How it works
 
 ```
  Any app (Notes, Mail, Safari, …)
-        │  AXUIElement: text, selection, caret bounds
+        │  keystrokes (CGEventTap): notices "/lina …" + , . ? ! ↩  and finished sentences
         ▼
- ┌─────────────┐   pause + finished word   ┌──────────────────────┐
- │ Input tap   │ ────────────────────────▶ │ Companion / Ghost    │
- │ (CGEventTap)│                           │ engines              │
- └─────────────┘                           └──────────┬───────────┘
-                                                      │ streaming
-                                                      ▼
-                                     Nebius Token Factory (Nemotron)
-                                       or a local OpenAI-compatible model
-                                                      │
-        ┌─────────────────────────────────────────────┘
+ ┌──────────────┐  reads the field (AXUIElement)  ┌──────────────────────────────┐
+ │ LinaEngine   │ ──────────────────────────────▶ │ Nemotron · FLUX · Gemini     │
+ └──────┬───────┘                                 └──────────────────────────────┘
+        │  card under the line (non-activating NSPanel), squiggles under mistakes, ^ tips
         ▼
- Floating, non-activating NSPanels: companion window · ghost text · palette
+ ⌘1 / ⌘2 / ⌘3  →  selects the exact range via Accessibility and pastes; your clipboard is restored
 ```
 
 ```
 Sources/Lina
-├── App/      LinaApp (menu bar + windows), self-test, live test, snapshot renderer
-├── Core/     Accessibility reader, event tap & text insertion, hotkey,
-│             streaming OpenAI-compatible client, prompts, settings, keychain, stats
-├── Engine/   Companion, GhostEngine, PaletteController, targets
-├── Desk/     DeskTextView (inline ghost, typewriter, focus), page store
-├── UI/       Companion panel, ghost panel, palette, menu bar, settings, onboarding
-└── Design/   Theme: ink, paper, New York serif, keycaps
+├── App/      LinaApp (menu bar face, windows), self-test, live test, snapshot renderer
+├── Core/     Commands (parser, sentences, proofread JSON), prompts, Token Factory + Gemini clients,
+│             Accessibility reader, event tap and text insertion, settings, keychain, history
+├── Engine/   LinaEngine, Writer (puts choices into the text), tips
+├── UI/       Cards, menu bar, Lina's window, use-case demos, onboarding, settings
+└── Design/   Lina's face and moods, theme
 ```
-
-- **Reading.** `AXUIElement` provides the focused field's text, selection and caret bounds. Lina skips secure fields, secure input and apps you've turned it off for.
-- **Timing.** A `CGEventTap` watches keystrokes and swallows Tab and Esc **only** while a suggestion is on screen. Lina waits for your pause (550 ms by default) after a finished word or comma before it asks the model, and typing cancels any request in flight.
-- **Showing.** Click-through, non-activating `NSPanel`s follow the caret. Accepted text is typed in as keyboard events, so it lands in the host app's own undo stack. Palette rewrites are pasted in, and your clipboard is restored afterwards.
 
 ## Privacy
 
-- Lina never reads password fields or secure input, and you can turn it off per app.
-- There's no account, telemetry or analytics. API keys are stored in the macOS Keychain.
-- Text goes only to the endpoint you choose. With **On this Mac**, nothing leaves your machine.
+- Lina reads only when you type `/lina` or finish a sentence, never password fields or secure input, and you can pause her per app.
+- What's sent: the finished sentence for checks; the paragraph for commands; the question and nearby words to Gemini for search; only the description for pictures. Settings → Privacy spells it out.
+- No account, telemetry or analytics. API keys are stored in the macOS Keychain. Saved items are a JSON file on your Mac.
 
 ## Develop
 
 ```sh
 swift test                                        # unit tests
-.build/debug/Lina --snapshots build/snapshots     # render every screen, light + dark
+.build/debug/Lina --snapshots build/snapshots     # render every screen and card, light + dark
+.build/debug/Lina --livetest                      # drive TextEdit end to end
 ```
 
 ## Roadmap
 
+- Skills and plug-ins: `/lina cite`, `/lina translate`, a team style guide, Notion and Google Docs search
+- A hand-drawn illustration set for Lina, and a new app icon
 - Signed, notarized release builds
-- Memory of past sessions, kept on-device, so the companion can follow a theme across days
-- Voice reflections
 - Intel Mac support
 
 ## Contributing
@@ -162,7 +153,7 @@ Issues and pull requests are welcome. Before you open a PR:
 
 1. Run `swift build` and `swift test`.
 2. For UI changes, render snapshots with `--snapshots` and attach the relevant screenshots.
-3. Keep Lina's promise: it never writes into the user's document without an explicit keystroke, and it never sends text anywhere the user didn't choose.
+3. Keep Lina's promise: she speaks only when asked, never writes into the user's text without a ⌘ keystroke, and never sends text anywhere the user didn't choose.
 
 ## Hackathon
 

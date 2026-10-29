@@ -11,25 +11,16 @@ struct LinaApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(engine: delegate.engine, palette: delegate.palette, companion: delegate.companion)
+            MenuBarView(engine: delegate.engine)
         } label: {
             MenuBarLabel(engine: delegate.engine)
         }
         .menuBarExtraStyle(.window)
 
-        Window("Desk", id: "desk") {
-            DeskView(openPalette: { delegate.palette.open() })
+        Window("Lina", id: "home") {
+            HomeView(engine: delegate.engine)
         }
-        .defaultSize(width: 1040, height: 720)
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("New Page") {
-                    DeskStore.shared.create()
-                    WindowOpener.shared.open("desk")
-                }
-                .keyboardShortcut("n")
-            }
-        }
+        .defaultSize(width: 1080, height: 740)
 
         Window("Welcome to Lina", id: "welcome") {
             OnboardingView(engine: delegate.engine)
@@ -64,14 +55,16 @@ final class WindowOpener {
     }
 }
 
-/// The menu bar icon. It is always on screen, so it's also where we capture the window actions.
+/// Lina's face in the menu bar. Her hair color and expression follow what she's doing.
+/// It is always on screen, so it's also where we capture the window actions.
 struct MenuBarLabel: View {
-    @ObservedObject var engine: GhostEngine
+    @ObservedObject var engine: LinaEngine
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        Image(systemName: symbol)
+        Image(nsImage: LinaFaceImage.image(engine.mood))
+            .accessibilityLabel("Lina, \(engine.mood.title.lowercased())")
             .onAppear {
                 WindowOpener.shared.openWindow = openWindow
                 WindowOpener.shared.openSettings = openSettings
@@ -80,22 +73,11 @@ struct MenuBarLabel: View {
                 }
             }
     }
-
-    private var symbol: String {
-        switch engine.status {
-        case .paused: "pencil.slash"
-        case .needsPermission, .needsModel, .error: "exclamationmark.bubble"
-        case .thinking: "ellipsis.bubble"
-        default: "pencil.and.scribble"
-        }
-    }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let engine = GhostEngine()
-    let palette = PaletteController()
-    let companion = Companion()
+    let engine = LinaEngine()
     private var permissionTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -104,14 +86,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         if let icon = Bundle.main.image(forResource: "AppIcon") { NSApp.applicationIconImage = icon }
 
-        palette.deskTargetProvider = { DeskRegistry.shared.activeTarget }
-        HotKeyCenter.shared.handler = { [weak self] in self?.companion.toggle() }
+        engine.onOpenSaved = {
+            HomeNavigation.shared.section = .saved
+            WindowOpener.shared.open("home")
+        }
+        HotKeyCenter.shared.handler = { [weak self] in self?.engine.askNow() }
         HotKeyCenter.shared.register(AppSettings.shared.hotKey)
-
-        engine.onTyped = { [weak self] in self?.companion.writerTyped() }
-        engine.onAppChanged = { [weak self] in self?.companion.focusChanged() }
         engine.start()
-        if AppSettings.shared.hasOnboarded && AppSettings.shared.companionEnabled { companion.show() }
         // Accessibility can be granted at any time; pick it up without a relaunch.
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.engine.refreshStatus() }
@@ -129,8 +110,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        History.shared.flush()
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { WindowOpener.shared.open("desk") }
+        if !flag { WindowOpener.shared.open("home") }
         return true
     }
 }

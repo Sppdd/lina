@@ -33,11 +33,6 @@ struct FocusSnapshot {
     var paragraph: String {
         text.substring(with: paragraphRange).trimmingCharacters(in: .newlines)
     }
-
-    func context() -> WritingContext {
-        WritingContext(before: before, after: after, selection: selectedText,
-                       appName: appName, windowTitle: windowTitle)
-    }
 }
 
 enum AX {
@@ -120,6 +115,25 @@ enum AX {
         var cf = CFRange(location: range.location, length: range.length)
         guard let v = AXValueCreate(.cfRange, &cf) else { return false }
         return AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, v) == .success
+    }
+
+    /// Where a range of text sits on screen, in Cocoa coordinates (origin bottom-left).
+    /// Used to underline mistakes and point tips at the writer's words.
+    static func screenRect(of range: NSRange, in element: AXUIElement) -> CGRect? {
+        guard let r = bounds(element, CFRange(location: range.location, length: range.length)) else { return nil }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        return CGRect(x: r.minX, y: primaryHeight - r.maxY, width: r.width, height: r.height)
+    }
+
+    /// The focused field's frame on screen, in Cocoa coordinates: a fallback anchor for cards
+    /// when an app won't say where its caret is.
+    static func frame(of element: AXUIElement) -> CGRect? {
+        guard let posValue: AXValue = copy(element, kAXPositionAttribute),
+              let sizeValue: AXValue = copy(element, kAXSizeAttribute) else { return nil }
+        var pos = CGPoint.zero, size = CGSize.zero
+        guard AXValueGetValue(posValue, .cgPoint, &pos), AXValueGetValue(sizeValue, .cgSize, &size) else { return nil }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        return CGRect(x: pos.x, y: primaryHeight - pos.y - size.height, width: size.width, height: size.height)
     }
 
     // MARK: Internals

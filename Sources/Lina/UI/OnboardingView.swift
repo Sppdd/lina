@@ -1,10 +1,11 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    @ObservedObject var engine: GhostEngine
+    @ObservedObject var engine: LinaEngine
     @ObservedObject var settings = AppSettings.shared
     @State var step = 0
     @State private var trusted = AX.isTrusted
+    @State private var demo = 0
     @Environment(\.dismissWindow) private var dismissWindow
     private let poll = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private let steps = 5
@@ -13,10 +14,10 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             ZStack {
                 switch step {
-                case 0: welcome
+                case 0: meet
                 case 1: access
-                case 2: model
-                case 3: voice
+                case 2: keys
+                case 3: see
                 default: ready
                 }
             }
@@ -27,7 +28,7 @@ struct OnboardingView: View {
 
             footer
         }
-        .frame(width: 680, height: 560)
+        .frame(width: 760, height: 640)
         .background(Theme.paper)
         .tint(Theme.ink)
         .onReceive(poll) { _ in
@@ -52,8 +53,8 @@ struct OnboardingView: View {
             }
             .animation(Theme.spring, value: step)
             Spacer()
-            Button(step == steps - 1 ? "Start Writing" : (step == 0 ? "Get Started" : "Continue")) {
-                if step == steps - 1 { finish(openDesk: false) } else { withAnimation(Theme.spring) { step += 1 } }
+            Button(step == steps - 1 ? "Start Writing" : (step == 0 ? "Say Hi" : "Continue")) {
+                if step == steps - 1 { finish() } else { withAnimation(Theme.spring) { step += 1 } }
             }
             .buttonStyle(InkButtonStyle())
             .keyboardShortcut(.defaultAction)
@@ -62,43 +63,47 @@ struct OnboardingView: View {
         .padding(.vertical, 20)
     }
 
-    private func finish(openDesk: Bool) {
+    private func finish() {
         settings.hasOnboarded = true
         engine.start()
         dismissWindow(id: "welcome")
-        if openDesk { WindowOpener.shared.open("desk") }
     }
 
     // MARK: Steps
 
-    private var welcome: some View {
-        VStack(spacing: 22) {
+    private var meet: some View {
+        VStack(spacing: 18) {
             Spacer()
-            Wordmark(size: 58)
+            TimelineView(.periodic(from: .now, by: 1.8)) { tl in
+                let moods: [Mood] = [.idle, .listening, .thinking, .found, .happy]
+                let i = Int(tl.date.timeIntervalSinceReferenceDate / 1.8) % moods.count
+                LinaFace(mood: moods[i], animated: true).frame(width: 190, height: 190)
+            }
             VStack(spacing: 10) {
-                Text("Write with someone beside you.")
-                    .font(Theme.serif(30, weight: .semibold))
-                Text("Lina reads along in any app and, when you pause, thinks with you in a small floating window — what you're saying, why you're saying it, and where it could go.")
-                    .font(.system(size: 14))
+                Text("Hi, I'm Lina.")
+                    .font(Theme.serif(34, weight: .semibold))
+                Text("I sit at your cursor in every app, and I only speak when you ask. Type /lina and I'll answer in a small card under your line: a fix, a fact, a question, or a picture.")
+                    .font(.system(size: 14.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 440)
+                    .frame(maxWidth: 500)
+                Text("Watch my hair: it changes color with what I'm doing.")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Theme.ink)
             }
-            GhostDemo()
-                .padding(.top, 8)
             Spacer()
         }
         .padding(.horizontal, 40)
     }
 
     private var access: some View {
-        StepLayout(symbol: "hand.raised", title: "Let Lina read along",
-                   message: "macOS asks you to approve apps that read what's on screen. Lina uses this only to see the text field you're writing in and where your cursor is — never password fields.") {
+        StepLayout(mood: trusted ? .happy : .listening, title: "Let me see what you're typing",
+                   message: "macOS asks you to approve apps that read the screen. I read only the line you're in when you type /lina or finish a sentence, never password fields.") {
             VStack(spacing: 14) {
                 if trusted {
                     Label("Access granted", systemImage: "checkmark.circle.fill")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Mood.happy.hair)
                         .transition(.scale.combined(with: .opacity))
                 } else {
                     Button("Open System Settings") { AX.grantAccess() }
@@ -107,76 +112,113 @@ struct OnboardingView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    Text("You can skip this and use Lina's Desk in the meantime.")
-                        .font(.system(size: 11)).foregroundStyle(.tertiary)
                 }
             }
             .animation(Theme.spring, value: trusted)
         }
     }
 
-    private var model: some View {
-        StepLayout(symbol: "cpu", title: "Choose Lina's mind",
-                   message: "Lina runs on open models. Use NVIDIA Nemotron on Nebius for speed, or a model on this Mac for complete privacy.") {
-            VStack(spacing: 12) {
+    private var keys: some View {
+        StepLayout(mood: settings.isModelConfigured ? .happy : .idle, title: "Give me a mind, and the web",
+                   message: "Nemotron on Nebius Token Factory checks your sentences and answers commands. Gemini lets me search the live web when you ask a question.") {
+            VStack(spacing: 14) {
                 HStack(spacing: 12) {
                     ForEach(Provider.allCases) { p in
                         let on = settings.provider == p
                         Button { withAnimation(Theme.spring) { settings.provider = p } } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Image(systemName: p == .nebius ? "bolt.horizontal.circle" : "desktopcomputer")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(on ? .white : Theme.ink)
-                                Text(p.title).font(.system(size: 14, weight: .semibold))
-                                Text(p.subtitle).font(.system(size: 11.5))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(p.title).font(.system(size: 13.5, weight: .semibold))
+                                Text(p.subtitle).font(.system(size: 11))
                                     .foregroundStyle(on ? .white.opacity(0.85) : .secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .foregroundStyle(on ? .white : .primary)
-                            .padding(14)
-                            .frame(width: 230, height: 118, alignment: .topLeading)
-                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .padding(12)
+                            .frame(width: 250, height: 70, alignment: .topLeading)
+                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(on ? Theme.ink : Color.primary.opacity(0.04)))
                         }
                         .buttonStyle(.plain)
                     }
                 }
                 if settings.provider == .nebius {
-                    OnboardingKeyField()
+                    KeyField(title: "Nebius API key", link: ("Get a key at tokenfactory.nebius.com", "https://tokenfactory.nebius.com/"),
+                             key: $settings.apiKey) { key in
+                        let client = LLMClient(endpoint: LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: key,
+                                                                     model: settings.checkModel))
+                        _ = try await client.complete([.system("Reply with one word."), .user("Say: ready")], maxTokens: 8, temperature: 0)
+                    }
                 } else {
                     Text("Start Ollama and run `ollama pull llama3.2`. You can change the server in Settings.")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
+                KeyField(title: "Gemini API key (optional, for web search)",
+                         link: ("Get a key at aistudio.google.com", "https://aistudio.google.com/apikey"),
+                         key: $settings.geminiKey) { key in
+                    _ = try await GeminiClient(apiKey: key, model: settings.geminiModel)
+                        .ask(system: "Answer in one word.", prompt: "What is the capital of France?")
+                }
             }
         }
     }
 
-    private var voice: some View {
-        StepLayout(symbol: "text.quote", title: "What do you write?",
-                   message: "Lina adapts its suggestions to your kind of writing. You can change this any time.") {
-            VStack(spacing: 14) {
-                VoicePicker(selection: $settings.voice, columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3))
-                    .frame(width: 560)
-                Stepper(value: $settings.dailyGoal, in: 100...5000, step: 50) {
-                    Text("Daily goal: **\(settings.dailyGoal) words**").font(.system(size: 13))
-                }
-                .frame(width: 260)
+    private var see: some View {
+        let cases = Array(UseCase.all.prefix(3))
+        let shown = cases[demo % cases.count]
+        return VStack(spacing: 14) {
+            VStack(spacing: 6) {
+                Text(shown.title).font(Theme.serif(26, weight: .semibold))
+                Text(shown.pitch)
+                    .font(.system(size: 13.5)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 520)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.top, 22)
+            DemoPlayer(useCase: shown, compact: true)
+                .id(shown.id)
+            HStack(spacing: 14) {
+                Button { withAnimation(Theme.spring) { demo = (demo + cases.count - 1) % cases.count } } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+                ForEach(0..<cases.count, id: \.self) { i in
+                    Circle().fill(i == demo % cases.count ? Theme.ink : Theme.ink.opacity(0.2)).frame(width: 6, height: 6)
+                }
+                Button { withAnimation(Theme.spring) { demo = (demo + 1) % cases.count } } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(.borderless)
+            }
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 40)
     }
 
     private var ready: some View {
-        StepLayout(symbol: "checkmark.seal", title: "You're ready.",
-                   message: "Open any app — Notes, Mail, Journal, a browser — and start writing. Lina's window will think with you when you pause.") {
+        StepLayout(mood: .happy, title: "Try me now.",
+                   message: "Open any app where you write: Notes, Mail, a browser. Or start with a practice page.") {
             VStack(spacing: 16) {
-                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
-                    ShortcutRow(keys: settings.hotKey.title.components(separatedBy: " "), text: "Show Lina and talk back")
-                    ShortcutRow(keys: ["↩"], text: "Send your answer to Lina's question")
-                    ShortcutRow(keys: ["✦"], text: "Ask Lina to read your draft again now")
+                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 9) {
+                    ForEach(CommandParser.words.prefix(5)) { w in
+                        GridRow {
+                            Text(w.usage)
+                                .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(Theme.ink)
+                                .gridColumnAlignment(.trailing)
+                            Text(w.detail).font(.system(size: 12.5))
+                        }
+                    }
+                    GridRow {
+                        Text("/lina <question>,")
+                            .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                            .foregroundStyle(Theme.ink)
+                        Text("Answers from the web, worded to fit your sentence.").font(.system(size: 12.5))
+                    }
                 }
                 .padding(18)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.04)))
-                Button("Or try it on the Desk first →") { finish(openDesk: true) }
+                Button("Open a practice page in TextEdit →") { TryIt.openTextEdit() }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.ink)
                     .font(.system(size: 13, weight: .medium))
@@ -186,83 +228,76 @@ struct OnboardingView: View {
 }
 
 private struct StepLayout<Content: View>: View {
-    let symbol: String
+    let mood: Mood
     let title: String
     let message: String
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(spacing: 18) {
-            Spacer(minLength: 20)
-            Image(systemName: symbol)
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(Theme.ink)
-                .frame(width: 72, height: 72)
-                .background(Circle().fill(Theme.ink.opacity(0.1)))
+        VStack(spacing: 16) {
+            Spacer(minLength: 16)
+            LinaFace(mood: mood, head: true, animated: true)
+                .frame(width: 84, height: 87)
             Text(title).font(Theme.serif(28, weight: .semibold))
             Text(message)
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 470)
-            content.padding(.top, 6)
+                .frame(maxWidth: 520)
+                .fixedSize(horizontal: false, vertical: true)
+            content.padding(.top, 4)
             Spacer(minLength: 10)
         }
         .padding(.horizontal, 40)
     }
 }
 
-private struct ShortcutRow: View {
-    let keys: [String]
-    let text: String
-    var body: some View {
-        GridRow {
-            HStack(spacing: 4) { ForEach(keys, id: \.self) { KeyCap($0, size: 12) } }
-                .gridColumnAlignment(.trailing)
-            Text(text).font(.system(size: 13))
-        }
-    }
-}
-
-private struct OnboardingKeyField: View {
-    @ObservedObject var settings = AppSettings.shared
-    @State private var key = ""
-    @State private var state: ModelSettings.TestState = .idle
+/// A key field with a Connect button that checks the key works.
+private struct KeyField: View {
+    let title: String
+    let link: (String, String)
+    @Binding var key: String
+    let check: (String) async throws -> Void
+    @State private var draft = ""
+    @State private var state: TestState = .idle
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 11.5, weight: .medium)).foregroundStyle(.secondary)
             HStack {
-                SecureField("Paste your Nebius API key", text: $key)
+                SecureField("Paste your key", text: $draft)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 330)
+                    .frame(width: 360)
                     .onSubmit(test)
                 Button(action: test) {
                     if state == .testing { ProgressView().controlSize(.small) } else { Text("Connect") }
                 }
-                .disabled(key.isEmpty || state == .testing)
+                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || state == .testing)
             }
             Group {
                 switch state {
                 case .idle:
-                    Link("Get a free key at tokenfactory.nebius.com", destination: URL(string: "https://tokenfactory.nebius.com/")!)
-                case .testing: Text("Saying hello to Nemotron…").foregroundStyle(.secondary)
-                case let .ok(ms): Label("Connected in \(ms) ms", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                case let .failed(m): Label(m, systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                    if let url = URL(string: link.1) { Link(link.0, destination: url) }
+                case .testing: Text("Checking…").foregroundStyle(.secondary)
+                case let .ok(ms): Label("Connected in \(ms) ms", systemImage: "checkmark.circle.fill").foregroundStyle(Mood.happy.hair)
+                case let .failed(m): Label(m, systemImage: "xmark.octagon.fill").foregroundStyle(Mood.worried.hair).lineLimit(2)
                 }
             }
-            .font(.system(size: 12))
+            .font(.system(size: 11.5))
         }
-        .onAppear { key = settings.apiKey }
+        .frame(width: 460, alignment: .leading)
+        .onAppear { draft = key }
     }
 
     private func test() {
-        settings.apiKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let k = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !k.isEmpty else { return }
+        key = k
         state = .testing
-        let client = LLMClient(endpoint: settings.endpoint)
         Task {
             let start = Date()
             do {
-                _ = try await client.complete([.system("Reply with one word."), .user("Say: ready")], maxTokens: 8, temperature: 0)
+                try await check(k)
                 state = .ok(Int(Date().timeIntervalSince(start) * 1000))
             } catch {
                 state = .failed(error.localizedDescription)
@@ -271,52 +306,4 @@ private struct OnboardingKeyField: View {
     }
 }
 
-/// A looping vignette of Lina at work: the writer types, pauses, and a thought appears in ink.
-struct GhostDemo: View {
-    private let typed = "The morning light came through the kitchen window,"
-    private let ghost = " and for the first time in weeks I wanted to write."
-    @State private var shown = 0
-    @State private var showGhost = false
-    @State private var accepted = false
-    @State private var caretOn = true
-
-    var body: some View {
-        HStack(spacing: 0) {
-            (Text(String(typed.prefix(shown)))
-                + Text(showGhost || accepted ? ghost : "")
-                    .foregroundColor(accepted ? .primary : Color(nsColor: Theme.nsGhost)))
-                .font(Theme.serif(17))
-                .lineSpacing(5)
-                .frame(width: 520, alignment: .leading)
-                .overlay(alignment: .bottomTrailing) {
-                    if showGhost && !accepted {
-                        KeyCap("tab", size: 11).offset(y: 22).transition(.opacity)
-                    }
-                }
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 18)
-        .frame(width: 580, height: 96, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.background))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.paperEdge, lineWidth: 1))
-        .shadow(color: .black.opacity(0.06), radius: 12, y: 6)
-        .task { await loop() }
-        .accessibilityLabel("Example: Lina suggests the end of a sentence as you write.")
-    }
-
-    @MainActor
-    private func loop() async {
-        while !Task.isCancelled {
-            shown = 0; showGhost = false; accepted = false
-            for i in 1...typed.count {
-                shown = i
-                try? await Task.sleep(for: .milliseconds(Int.random(in: 35...85)))
-            }
-            try? await Task.sleep(for: .milliseconds(700))
-            withAnimation(.easeIn(duration: 0.35)) { showGhost = true }
-            try? await Task.sleep(for: .milliseconds(1700))
-            withAnimation(Theme.quick) { accepted = true }
-            try? await Task.sleep(for: .milliseconds(2400))
-        }
-    }
-}
+enum TestState: Equatable { case idle, testing, ok(Int), failed(String) }

@@ -1,17 +1,18 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @ObservedObject var engine: GhostEngine
+    @ObservedObject var engine: LinaEngine
 
     var body: some View {
         TabView {
             GeneralSettings(engine: engine).tabItem { Label("General", systemImage: "gearshape") }
-            ModelSettings().tabItem { Label("Model", systemImage: "cpu") }
+            ModelSettings().tabItem { Label("Models", systemImage: "cpu") }
+            SearchSettings().tabItem { Label("Search", systemImage: "globe") }
             VoiceSettings().tabItem { Label("Voice", systemImage: "text.quote") }
             AppsSettings().tabItem { Label("Apps", systemImage: "square.grid.2x2") }
             PrivacySettings().tabItem { Label("Privacy", systemImage: "lock") }
         }
-        .frame(width: 560)
+        .frame(width: 580)
         .tint(Theme.ink)
     }
 }
@@ -19,78 +20,43 @@ struct SettingsView: View {
 // MARK: General
 
 private struct GeneralSettings: View {
-    @ObservedObject var engine: GhostEngine
+    @ObservedObject var engine: LinaEngine
     @ObservedObject var settings = AppSettings.shared
 
     var body: some View {
         Form {
             Section {
-                Toggle("Think with me in a floating window", isOn: $settings.companionEnabled)
-                LabeledContent("Read again after a pause of") {
-                    HStack {
-                        Slider(value: $settings.companionPauseMs, in: 1000...8000, step: 250)
-                            .frame(width: 180)
-                        Text(String(format: "%.1f s", settings.companionPauseMs / 1000))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(width: 64, alignment: .trailing)
-                    }
-                }
+                Toggle("Lina is on", isOn: $settings.enabled)
+                Toggle("Check each sentence when I type a dot", isOn: $settings.checkSentences)
+                Toggle("Show tips under my text while I learn", isOn: $settings.showTips)
+                Button("Show tips again") { engine.tips.reset() }
             } header: {
-                Text("Companion")
+                Text("Lina")
             } footer: {
-                Text("Lina reads the draft you're working on and tells you what it hears, why you might be writing it, and a question to take it further. It never types into your document.")
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Toggle("Ghost text at the cursor", isOn: $settings.enabled)
-                Picker("Suggestion length", selection: $settings.length) {
-                    ForEach(SuggestionLength.allCases) { Text($0.title).tag($0) }
-                }
-                LabeledContent("Wait before suggesting") {
-                    HStack {
-                        Slider(value: $settings.debounceMs, in: 250...1500, step: 50)
-                            .frame(width: 180)
-                        Text("\(Int(settings.debounceMs)) ms")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(width: 64, alignment: .trailing)
-                    }
-                }
-            } footer: {
-                Text("Optional autocomplete: a short continuation when you pause after a word or comma. Tab keeps it.")
+                Text("Lina reads only when you type /lina (finished with . , ? ! or Return) or end a sentence. Nothing goes into your text until you press ⌘1, ⌘2 or ⌘3.")
                     .foregroundStyle(.secondary)
             }
 
             Section("Shortcuts") {
-                Picker("Show or hide Lina", selection: $settings.hotKey) {
-                    ForEach(PaletteHotKey.allCases) { Text($0.title).tag($0) }
+                Picker("Ask Lina a question", selection: $settings.hotKey) {
+                    ForEach(LinaHotKey.allCases) { Text($0.title).tag($0) }
                 }
                 .onChange(of: settings.hotKey) { _, k in HotKeyCenter.shared.register(k) }
-                LabeledContent("Keep suggestion") { KeyCap("tab", size: 12) }
-                LabeledContent("Keep one word") { HStack(spacing: 4) { KeyCap("⌥", size: 12); KeyCap("tab", size: 12) } }
-                LabeledContent("Dismiss") { KeyCap("esc", size: 12) }
-            }
-
-            Section("Daily goal") {
-                Stepper(value: $settings.dailyGoal, in: 100...5000, step: 50) {
-                    Text("\(settings.dailyGoal) words a day")
-                }
-                Toggle("Open Lina at login", isOn: Binding(
-                    get: { settings.launchAtLogin }, set: { settings.launchAtLogin = $0 }))
+                LabeledContent("Choose an option") { HStack(spacing: 4) { KeyCap("⌘1", size: 12); KeyCap("⌘2", size: 12); KeyCap("⌘3", size: 12) } }
+                LabeledContent("Dismiss a card") { KeyCap("esc", size: 12) }
+                LabeledContent("Undo a choice") { KeyCap("⌘Z", size: 12) }
             }
 
             Section {
-                LabeledContent("Status") {
+                Toggle("Open Lina at login", isOn: Binding(
+                    get: { settings.launchAtLogin }, set: { settings.launchAtLogin = $0 }))
+                LabeledContent("Accessibility") {
                     if engine.isTrusted {
-                        Label("Granted", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label("Granted", systemImage: "checkmark.circle.fill").foregroundStyle(Mood.happy.hair)
                     } else {
                         Button("Grant Access…") { AX.grantAccess() }
                     }
                 }
-            } header: {
-                Text("Accessibility")
             } footer: {
                 if !engine.isTrusted {
                     Text("Already switched on in System Settings? Click Grant Access: Lina clears the old entry left by an earlier build, so you can switch it on once more.")
@@ -99,27 +65,23 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)
+        .frame(height: 500)
     }
 }
 
-// MARK: Model
+// MARK: Models
 
 struct ModelSettings: View {
     @ObservedObject var settings = AppSettings.shared
-    @State private var models: [String] = []
+    @State private var models: [ModelItem] = []
     @State private var testState: TestState = .idle
     @State private var keyDraft = ""
-
-    enum TestState: Equatable { case idle, testing, ok(Int), failed(String) }
 
     var body: some View {
         Form {
             Section {
                 Picker("Provider", selection: $settings.provider) {
-                    ForEach(Provider.allCases) { p in
-                        VStack(alignment: .leading) { Text(p.title) }.tag(p)
-                    }
+                    ForEach(Provider.allCases) { p in Text(p.title).tag(p) }
                 }
                 .pickerStyle(.radioGroup)
                 Text(settings.provider.subtitle).font(.callout).foregroundStyle(.secondary)
@@ -130,15 +92,15 @@ struct ModelSettings: View {
                     SecureField("API key", text: $keyDraft, prompt: Text("Paste your Nebius API key"))
                         .onSubmit(saveKey)
                         .onChange(of: keyDraft) { _, _ in if testState != .testing { testState = .idle } }
-                    modelPicker("Companion", selection: $settings.companionModel)
-                    modelPicker("Ghost text", selection: $settings.nebiusModel)
+                    modelPicker("Commands", kind: .text, selection: $settings.commandModel)
+                    modelPicker("Sentence checks", kind: .text, selection: $settings.checkModel)
                 } header: {
                     Text("Nebius Token Factory")
                 } footer: {
                     HStack {
                         Link("Get an API key →", destination: URL(string: "https://tokenfactory.nebius.com/")!)
                         Spacer()
-                        Text("Defaults: NVIDIA Nemotron 3 Super thinks with you; Nemotron 3 Nano keeps up with ghost text.")
+                        Text("Nemotron 3 Super answers commands; Nemotron 3 Nano checks sentences fast.")
                             .foregroundStyle(.secondary)
                     }
                     .font(.caption)
@@ -146,13 +108,22 @@ struct ModelSettings: View {
             } else {
                 Section {
                     TextField("Server", text: $settings.localBaseURL)
-                    modelPicker("Model", selection: $settings.localModel)
+                    modelPicker("Model", kind: .text, selection: $settings.localModel)
                 } header: {
                     Text("Local server (OpenAI-compatible)")
                 } footer: {
-                    Text("Works with Ollama (`ollama serve`), LM Studio, or llama.cpp's server. Try `ollama pull llama3.2`.")
+                    Text("Works with Ollama (`ollama serve`), LM Studio, or llama.cpp's server. Web search still uses Gemini when you add a key; pictures need Token Factory.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+            }
+
+            Section {
+                modelPicker("Pictures", kind: .image, selection: $settings.imageModel)
+            } header: {
+                Text("Images")
+            } footer: {
+                Text("Used by /lina image. FLUX models on Token Factory; needs the Nebius key above.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section {
@@ -165,33 +136,31 @@ struct ModelSettings: View {
                     switch testState {
                     case .idle: EmptyView()
                     case .testing: Text("Asking the model…").foregroundStyle(.secondary)
-                    case let .ok(ms): Label("Connected · \(ms) ms", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                    case let .failed(m): Label(m, systemImage: "xmark.octagon.fill").foregroundStyle(.red).lineLimit(2)
+                    case let .ok(ms): Label("Connected · \(ms) ms", systemImage: "checkmark.circle.fill").foregroundStyle(Mood.happy.hair)
+                    case let .failed(m): Label(m, systemImage: "xmark.octagon.fill").foregroundStyle(Mood.worried.hair).lineLimit(2)
                     }
                 }
+            } footer: {
+                Text("Tip: type /lina model in any app to switch models without opening Settings.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)
+        .frame(height: 500)
         .onAppear { keyDraft = settings.apiKey }
         .onDisappear(perform: saveKey)
     }
 
     @ViewBuilder
-    private func modelPicker(_ title: String, selection: Binding<String>) -> some View {
+    private func modelPicker(_ title: String, kind: ModelItem.Kind, selection: Binding<String>) -> some View {
+        let options = models.filter { $0.kind == kind }.map(\.id)
         HStack {
-            if models.isEmpty {
+            if options.isEmpty {
                 TextField(title, text: selection)
             } else {
                 Picker(title, selection: selection) {
-                    if !models.contains(selection.wrappedValue) { Text(selection.wrappedValue).tag(selection.wrappedValue) }
-                    let nvidia = models.filter { $0.lowercased().contains("nvidia") || $0.lowercased().contains("nemotron") }
-                    if !nvidia.isEmpty {
-                        Section("NVIDIA") { ForEach(nvidia, id: \.self) { Text($0).tag($0) } }
-                    }
-                    Section("Other") {
-                        ForEach(models.filter { !nvidia.contains($0) }, id: \.self) { Text($0).tag($0) }
-                    }
+                    if !options.contains(selection.wrappedValue) { Text(selection.wrappedValue).tag(selection.wrappedValue) }
+                    ForEach(options, id: \.self) { Text($0).tag($0) }
                 }
             }
             Button { Task { await loadModels() } } label: { Image(systemName: "arrow.clockwise") }
@@ -206,14 +175,15 @@ struct ModelSettings: View {
 
     private func loadModels() async {
         saveKey()
-        do { models = try await LLMClient(endpoint: settings.endpoint).listModels() }
+        let endpoint = settings.provider == .local ? settings.commandEndpoint : settings.nebiusEndpoint
+        do { models = ModelCatalog.items(try await LLMClient(endpoint: endpoint).listModels()) }
         catch { testState = .failed(error.localizedDescription) }
     }
 
     private func test() {
         saveKey()
         testState = .testing
-        let client = LLMClient(endpoint: settings.endpoint)
+        let client = LLMClient(endpoint: settings.checkEndpoint)
         Task {
             let start = Date()
             do {
@@ -222,6 +192,70 @@ struct ModelSettings: View {
                 let ms = Int(Date().timeIntervalSince(start) * 1000)
                 testState = out.isEmpty ? .failed("Empty reply") : .ok(ms)
                 if models.isEmpty { await loadModels() }
+            } catch {
+                testState = .failed(error.localizedDescription)
+            }
+        }
+    }
+}
+
+// MARK: Search
+
+private struct SearchSettings: View {
+    @ObservedObject var settings = AppSettings.shared
+    @State private var keyDraft = ""
+    @State private var testState: TestState = .idle
+
+    var body: some View {
+        Form {
+            Section {
+                SecureField("Gemini API key", text: $keyDraft, prompt: Text("Paste your Gemini API key"))
+                    .onSubmit(saveKey)
+                TextField("Model", text: $settings.geminiModel)
+                HStack {
+                    Button(action: test) {
+                        if testState == .testing { ProgressView().controlSize(.small) } else { Text("Test Search") }
+                    }
+                    .disabled(testState == .testing)
+                    Spacer()
+                    switch testState {
+                    case .idle: EmptyView()
+                    case .testing: Text("Searching…").foregroundStyle(.secondary)
+                    case let .ok(ms): Label("Search works · \(ms) ms", systemImage: "checkmark.circle.fill").foregroundStyle(Mood.happy.hair)
+                    case let .failed(m): Label(m, systemImage: "xmark.octagon.fill").foregroundStyle(Mood.worried.hair).lineLimit(2)
+                    }
+                }
+            } header: {
+                Text("Google Search via Gemini")
+            } footer: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Anything after /lina that isn't a command is a question. Lina searches Google through Gemini's grounding, then words the answer to fit your sentence. You can also put GEMINI_API_KEY in the .env file next to Lina.")
+                    Link("Get a Gemini API key →", destination: URL(string: "https://aistudio.google.com/apikey")!)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(height: 500)
+        .onAppear { keyDraft = settings.geminiKey }
+        .onDisappear(perform: saveKey)
+    }
+
+    private func saveKey() {
+        let k = keyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if k != settings.geminiKey { settings.geminiKey = k }
+    }
+
+    private func test() {
+        saveKey()
+        testState = .testing
+        let gemini = settings.gemini
+        Task {
+            let start = Date()
+            do {
+                _ = try await gemini.ask(system: "Answer in a few words.", prompt: "Who won the most recent FIFA World Cup?")
+                testState = .ok(Int(Date().timeIntervalSince(start) * 1000))
             } catch {
                 testState = .failed(error.localizedDescription)
             }
@@ -242,7 +276,7 @@ struct VoiceSettings: View {
             } header: {
                 Text("What do you write most?")
             } footer: {
-                Text("Lina adapts its suggestions to the kind of writing you do.").foregroundStyle(.secondary)
+                Text("Lina's questions and rewrites follow the kind of writing you do.").foregroundStyle(.secondary)
             }
             Section {
                 TextEditor(text: $settings.aboutMe)
@@ -257,7 +291,7 @@ struct VoiceSettings: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)
+        .frame(height: 500)
     }
 }
 
@@ -330,14 +364,14 @@ private struct AppsSettings: View {
                     .controlSize(.small)
                 }
             } header: {
-                Text("Suggest in these apps")
+                Text("Lina works in these apps")
             } footer: {
-                Text("Lina never reads password fields or anything typed while secure input is on. Password managers and terminals are off by default.")
+                Text("Shows the apps that are open now. Lina never reads password fields or anything typed while secure input is on. Password managers and terminals are off by default.")
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)
+        .frame(height: 500)
     }
 }
 
@@ -345,34 +379,42 @@ private struct AppsSettings: View {
 
 private struct PrivacySettings: View {
     @ObservedObject var settings = AppSettings.shared
-    @ObservedObject var stats = WritingStats.shared
+    @ObservedObject var history = History.shared
+    @State private var confirmClear = false
 
     var body: some View {
         Form {
             Section("What Lina reads") {
-                PrivacyRow(symbol: "text.cursor", title: "Only the field you're typing in",
-                           detail: "Up to ~3,000 characters before your cursor and a little after, plus the app's name.")
+                PrivacyRow(symbol: "text.cursor", title: "Only when you ask",
+                           detail: "When you type /lina or finish a sentence, Lina reads the field you're in. Nothing is read while you just type.")
                 PrivacyRow(symbol: "lock.shield", title: "Never secure fields",
                            detail: "Password fields, secure input, and apps you turn off are ignored completely.")
             }
-            Section("Where it goes") {
-                if settings.provider == .nebius {
-                    PrivacyRow(symbol: "cloud", title: "Nebius Token Factory",
-                               detail: "That context is sent over HTTPS to generate a suggestion. Switch to “On this Mac” in Model to keep everything local.")
-                } else {
-                    PrivacyRow(symbol: "desktopcomputer", title: "Stays on this Mac",
-                               detail: "Suggestions come from your local model server at \(settings.localBaseURL).")
-                }
-                PrivacyRow(symbol: "chart.bar", title: "Stats are local",
-                           detail: "Word counts and streaks are stored only on this Mac. No analytics, no account.")
+            Section("What gets sent, and where") {
+                PrivacyRow(symbol: "checkmark.seal", title: "Sentence checks",
+                           detail: "The sentence you finished and up to 600 characters before it, to \(settings.provider == .nebius ? "Nebius Token Factory" : "your local server at \(settings.localBaseURL)").")
+                PrivacyRow(symbol: "text.bubble", title: "/lina, fix, rewrite and edit",
+                           detail: "The paragraph the command works on (for /lina, up to 4,000 characters before it), to the same place.")
+                PrivacyRow(symbol: "globe", title: "Questions",
+                           detail: settings.hasSearch
+                               ? "Your question and the words around it (about 700 characters) go to Google Gemini, which searches the web."
+                               : "Your question and the words around it go to your model. Add a Gemini key to search the web.")
+                PrivacyRow(symbol: "photo", title: "Pictures",
+                           detail: "Only the description you typed, to Nebius Token Factory.")
             }
             Section {
-                Button("Reset Writing Stats", role: .destructive) { stats.reset() }
-                Button("Show Desk Pages in Finder") { NSWorkspace.shared.open(DeskStore.shared.folder) }
+                PrivacyRow(symbol: "tray.full", title: "Saved stays here",
+                           detail: "Searches, questions, rewrites and pictures are saved in a file on this Mac. No account, no analytics.")
+                Button("Show Saved Files in Finder") { NSWorkspace.shared.open(history.folder) }
+                Button("Delete Everything Saved…", role: .destructive) { confirmClear = true }
+                    .disabled(history.items.isEmpty)
+                    .confirmationDialog("Delete everything Lina has saved?", isPresented: $confirmClear) {
+                        Button("Delete All", role: .destructive) { history.clear() }
+                    }
             }
         }
         .formStyle(.grouped)
-        .frame(height: 520)
+        .frame(height: 500)
     }
 }
 

@@ -24,6 +24,30 @@ enum TextInserter {
 
     /// Pastes text via the clipboard (atomic, keeps formatting simple), then restores the clipboard.
     static func paste(_ text: String) {
+        pasteRestoring { pb in pb.setString(text, forType: .string) }
+    }
+
+    /// Pastes a picture, for `/lina image`, then restores the clipboard.
+    static func pasteImage(_ png: Data) {
+        pasteRestoring { pb in
+            pb.setData(png, forType: .png)
+            if let tiff = NSImage(data: png)?.tiffRepresentation { pb.setData(tiff, forType: .tiff) }
+        }
+    }
+
+    /// Deletes whatever is selected in the app in front.
+    static func deleteSelection() {
+        post(keyCode: CGKeyCode(kVK_Delete), unicode: nil, source: CGEventSource(stateID: .privateState))
+    }
+
+    static func copyImage(_ png: Data) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setData(png, forType: .png)
+        if let tiff = NSImage(data: png)?.tiffRepresentation { pb.setData(tiff, forType: .tiff) }
+    }
+
+    private static func pasteRestoring(_ fill: (NSPasteboard) -> Void) {
         let pb = NSPasteboard.general
         let saved: [NSPasteboardItem] = (pb.pasteboardItems ?? []).map { item in
             let copy = NSPasteboardItem()
@@ -31,7 +55,7 @@ enum TextInserter {
             return copy
         }
         pb.clearContents()
-        pb.setString(text, forType: .string)
+        fill(pb)
         // Tell clipboard managers this is transient.
         pb.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
 
@@ -42,7 +66,7 @@ enum TextInserter {
             e?.setIntegerValueField(.eventSourceUserData, value: linaEventMarker)
             e?.post(tap: .cghidEventTap)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             pb.clearContents()
             if !saved.isEmpty { pb.writeObjects(saved) }
         }
@@ -64,7 +88,7 @@ enum TextInserter {
     }
 }
 
-/// Global keyboard/mouse observer. Can swallow Tab and Esc — but only while a suggestion is showing.
+/// Global keyboard/mouse observer. Swallows keys only while a Lina card is waiting for a choice.
 final class KeyMonitor {
     /// Return true to consume the event.
     var onKeyDown: ((CGEvent) -> Bool)?
@@ -145,8 +169,9 @@ final class HotKeyCenter {
     private var ref: EventHotKeyRef?
     private var installed = false
 
-    func register(_ key: PaletteHotKey) {
+    func register(_ key: LinaHotKey) {
         if let ref { UnregisterEventHotKey(ref); self.ref = nil }
+        if key == .off { return }
         if !installed {
             var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
             InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
@@ -159,6 +184,7 @@ final class HotKeyCenter {
         case .optionSpace: (kVK_Space, optionKey)
         case .controlSpace: (kVK_Space, controlKey)
         case .commandShiftL: (kVK_ANSI_L, cmdKey | shiftKey)
+        case .off: (0, 0)
         }
         let id = EventHotKeyID(signature: OSType(0x4C494E41), id: 1)
         RegisterEventHotKey(UInt32(code), UInt32(mods), id, GetApplicationEventTarget(), 0, &ref)
