@@ -154,6 +154,9 @@ enum LiveTest {
             let code: CGKeyCode = ch == 32 ? CGKeyCode(kVK_Space) : ch == 10 ? CGKeyCode(kVK_Return) : 0
             for down in [true, false] {
                 let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: down)
+                // Events from the HID state source can inherit the ⌘ from the ⌘A posted just before, which turns
+                // "h" into ⌘H (Hide TextEdit). A writer typing holds no modifiers.
+                e?.flags = []
                 if ch != 10 {
                     var u = [ch]
                     e?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &u)
