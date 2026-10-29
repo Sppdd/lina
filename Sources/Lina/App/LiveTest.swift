@@ -83,6 +83,13 @@ enum LiveTest {
         say("Fixed ✓ “\(fixed)”")
 
         say("Typing /lina help in the text, then Return…")
+        try? await Task.sleep(for: .seconds(0.8))
+        if !textEditInFront {
+            let front = NSWorkspace.shared.frontmostApplication
+            say("Before typing the command, \(front?.localizedName ?? "nothing") was in front; bringing TextEdit back")
+            NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").first?.activate()
+            try? await Task.sleep(for: .seconds(0.6))
+        }
         await typeAsUser("\n/lina help")
         try? await Task.sleep(for: .seconds(0.4))
         let typed = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
@@ -139,7 +146,11 @@ enum LiveTest {
     private static func typeAsUser(_ s: String) async {
         let src = CGEventSource(stateID: .hidSystemState)
         for ch in s.utf16 {
-            guard textEditInFront else { say("TextEdit lost focus — stopped typing"); return }
+            guard textEditInFront else {
+                let front = NSWorkspace.shared.frontmostApplication
+                say("TextEdit lost focus to \(front?.localizedName ?? "nothing") (\(front?.bundleIdentifier ?? "?")) — stopped typing")
+                return
+            }
             let code: CGKeyCode = ch == 32 ? CGKeyCode(kVK_Space) : ch == 10 ? CGKeyCode(kVK_Return) : 0
             for down in [true, false] {
                 let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: down)
