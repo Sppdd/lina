@@ -46,6 +46,8 @@ Writing is how people think through the things that matter to them: a journal en
 
 ## What Lina does
 
+New to Lina? **[How to use Lina](docs/USAGE.md)** walks through every feature with examples.
+
 | Feature | |
 |---|---|
 | **Companion** | When you pause, Lina reads the whole draft and writes what it hears and one question for you in an ink card just above your cursor, in any app. There's no window to look away to. It steps aside as soon as you type or press `esc`. `⌥ Space` opens a reply box to talk it through. With the ink drop off, Lina uses a popup instead. |
