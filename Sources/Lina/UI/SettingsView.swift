@@ -27,22 +27,35 @@ private struct GeneralSettings: View {
         Form {
             Section {
                 Toggle("Lina is on", isOn: $settings.enabled)
-                Toggle("Check each sentence when I type a dot", isOn: $settings.checkSentences)
+                Toggle("Open a command bar when I type /lina", isOn: $settings.commandBar)
+                Toggle("Check each sentence I finish", isOn: $settings.checkSentences)
+                LabeledContent("Show fixes after I stop typing for") {
+                    HStack {
+                        Slider(value: $settings.checkDelay, in: 0.3...5, step: 0.1)
+                            .frame(width: 170)
+                        Text(String(format: "%.1f s", settings.checkDelay))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                }
+                .disabled(!settings.checkSentences)
                 Toggle("Show tips under my text while I learn", isOn: $settings.showTips)
                 Button("Show tips again") { engine.tips.reset() }
             } header: {
                 Text("Lina")
             } footer: {
-                Text("Lina reads only when you type /lina (finished with . , ? ! or Return) or end a sentence. Nothing goes into your text until you press ⌘1, ⌘2 or ⌘3.")
+                Text("Lina reads only when you type /lina or stop typing after a sentence. Fixes appear right above your mistakes; nothing goes into your text until you press ⌘1, ⌘2… or ⌘A for all of them.")
                     .foregroundStyle(.secondary)
             }
 
             Section("Shortcuts") {
-                Picker("Ask Lina a question", selection: $settings.hotKey) {
+                Picker("Open the command bar", selection: $settings.hotKey) {
                     ForEach(LinaHotKey.allCases) { Text($0.title).tag($0) }
                 }
                 .onChange(of: settings.hotKey) { _, k in HotKeyCenter.shared.register(k) }
-                LabeledContent("Choose an option") { HStack(spacing: 4) { KeyCap("⌘1", size: 12); KeyCap("⌘2", size: 12); KeyCap("⌘3", size: 12) } }
+                LabeledContent("Take one fix or option") { HStack(spacing: 4) { KeyCap("⌘1", size: 12); KeyCap("⌘2", size: 12); KeyCap("⌘3", size: 12) } }
+                LabeledContent("Take every fix") { KeyCap("⌘A", size: 12) }
                 LabeledContent("Dismiss a card") { KeyCap("esc", size: 12) }
                 LabeledContent("Undo a choice") { KeyCap("⌘Z", size: 12) }
             }
@@ -386,7 +399,7 @@ private struct PrivacySettings: View {
         Form {
             Section("What Lina reads") {
                 PrivacyRow(symbol: "text.cursor", title: "Only when you ask",
-                           detail: "When you type /lina or finish a sentence, Lina reads the field you're in. Nothing is read while you just type.")
+                           detail: "When you type /lina or stop typing after a sentence, Lina reads the field you're in. Nothing is read while you're typing.")
                 PrivacyRow(symbol: "lock.shield", title: "Never secure fields",
                            detail: "Password fields, secure input, and apps you turn off are ignored completely.")
             }

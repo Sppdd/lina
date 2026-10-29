@@ -2,8 +2,8 @@ import AppKit
 import Carbon.HIToolbox
 
 /// `Lina --livetest [--local MODEL]` drives a real TextEdit window end to end:
-/// types a sentence with mistakes, waits for Lina's card, presses ⌘1 and checks the fix landed.
-/// Then it types `/lina help` and checks the command card appears and the command is removed.
+/// types a sentence with mistakes, waits for Lina's fixes, presses ⌘A and checks they landed.
+/// Then it types `/lina`, asks for help in the command bar, and checks nothing was left in the text.
 @MainActor
 enum LiveTest {
     static func runIfRequested(engine: LinaEngine) {
@@ -54,38 +54,37 @@ enum LiveTest {
         }
         guard ready else { say("Could not get a clean TextEdit document"); return false }
 
-        // Wait for the corrections card.
+        // Wait for the fixes to appear over the mistakes.
         let t0 = Date()
         while Date().timeIntervalSince(t0) < 30 {
-            if case .corrections? = engine.card { break }
+            if !engine.pendingFixes.isEmpty { break }
             if case let .error(m) = engine.status { say("Model error: \(m)"); return false }
             try? await Task.sleep(for: .milliseconds(100))
         }
-        guard case let .corrections(_, marks, options)? = engine.card else {
-            say("No corrections card within 30 s (status: \(engine.status))")
-            return false
-        }
-        say("Card after \(Int(Date().timeIntervalSince(t0) * 1000)) ms: \(marks.count) marks, ⌘1 = “\(options.first ?? "")”")
+        let fixes = engine.pendingFixes
+        guard !fixes.isEmpty else { say("No fixes within 30 s (status: \(engine.status))"); return false }
+        say("Fixes after \(Int(Date().timeIntervalSince(t0) * 1000)) ms: " + fixes.map { $0.wrong + " → " + $0.right }.joined(separator: ", "))
 
-        say("Pressing ⌘1…")
-        postKey(CGKeyCode(kVK_ANSI_1), flags: .maskCommand)
+        say("Pressing ⌘A…")
+        postKey(CGKeyCode(kVK_ANSI_A), flags: .maskCommand)
         try? await Task.sleep(for: .seconds(1.5))
         let fixed = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
-        guard fixed.contains("really"), !fixed.contains("realy") else { say("⌘1 did not apply the fix: “\(fixed)”"); return false }
+        guard fixed.contains("really"), !fixed.contains("realy") else { say("⌘A did not apply the fixes: “\(fixed)”"); return false }
         say("Fixed ✓ “\(fixed)”")
 
-        say("Typing /lina help…")
-        await typeAsUser("\n/lina help.")
+        say("Typing /lina, then help in the bar…")
+        await typeAsUser("\n/lina")
+        try? await Task.sleep(for: .seconds(0.6))
+        await typeAsUser("help\n")
         let t1 = Date()
         while Date().timeIntervalSince(t1) < 5 {
             if engine.card == .help { break }
             try? await Task.sleep(for: .milliseconds(100))
         }
         guard engine.card == .help else { say("No help card"); return false }
-        try? await Task.sleep(for: .seconds(0.8))
         let after = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
-        guard !after.contains("/lina") else { say("The command was left in the text: “\(after)”"); return false }
-        say("Help card shown and the command removed ✓")
+        guard !after.contains("/lin") else { say("The command was left in the text: “\(after)”"); return false }
+        say("Help card shown, and the text has no command in it ✓")
         postKey(CGKeyCode(kVK_Escape), flags: [])
         return true
     }

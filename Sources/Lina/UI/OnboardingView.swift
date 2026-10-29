@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct OnboardingView: View {
     @ObservedObject var engine: LinaEngine
@@ -82,7 +83,7 @@ struct OnboardingView: View {
             VStack(spacing: 10) {
                 Text("Hi, I'm Lina.")
                     .font(Theme.serif(34, weight: .semibold))
-                Text("I sit at your cursor in every app, and I only speak when you ask. Type /lina and I'll answer in a small card under your line: a fix, a fact, a question, or a picture.")
+                Text("I sit at your cursor in every app, and I only speak when you ask. Type /lina and a small bar opens right there: ask for a fact, a question, a rewrite or a picture. When you pause after a sentence, I put fixes above any mistakes.")
                     .font(.system(size: 14.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -98,7 +99,7 @@ struct OnboardingView: View {
 
     private var access: some View {
         StepLayout(mood: trusted ? .happy : .listening, title: "Let me see what you're typing",
-                   message: "macOS asks you to approve apps that read the screen. I read only the line you're in when you type /lina or finish a sentence, never password fields.") {
+                   message: "macOS asks you to approve apps that read the screen. I read the field you're in only when you type /lina or pause after a sentence, never password fields.") {
             VStack(spacing: 14) {
                 if trusted {
                     Label("Access granted", systemImage: "checkmark.circle.fill")
@@ -210,7 +211,7 @@ struct OnboardingView: View {
                         }
                     }
                     GridRow {
-                        Text("/lina <question>,")
+                        Text("/lina <question> ↩")
                             .font(.system(size: 12.5, weight: .medium, design: .monospaced))
                             .foregroundStyle(Theme.ink)
                         Text("Answers from the web, worded to fit your sentence.").font(.system(size: 12.5))

@@ -82,6 +82,26 @@ final class CommandTests: XCTestCase {
         XCTAssertEqual(s.substring(with: r), "She said she was fine?")
     }
 
+    func testRecentSentencesWhenTheWriterKeepsGoing() {
+        let s = "First one is here. Second one too! Third is fine. Fourth" as NSString
+        let found = Sentences.recentFinished(in: s, caret: s.length).map { s.substring(with: $0) }
+        XCTAssertEqual(found, ["First one is here.", "Second one too!", "Third is fine."])
+    }
+
+    func testCommandBarText() {
+        XCTAssertEqual(CommandParser.parseBar(""), .ask)
+        XCTAssertEqual(CommandParser.parseBar("rewrite polite"), .rewrite("polite"))
+        XCTAssertEqual(CommandParser.parseBar("who won the final, "), .search("who won the final"))
+        XCTAssertEqual(CommandParser.parseBar("who won the final?"), .search("who won the final?"))
+        XCTAssertEqual(CommandParser.parseBar("/lina model"), .model(""))
+    }
+
+    func testTargetBeforeTheCaret() throws {
+        let s = "First para here.\n\nSecond one starts" as NSString
+        let t = try XCTUnwrap(CommandParser.target(before: s.length, in: s))
+        XCTAssertEqual(s.substring(with: t), "Second one starts")
+    }
+
     func testShortOrCommandSentencesAreSkipped() {
         XCTAssertNil(Sentences.lastFinished(in: "Hi." as NSString, caret: 3))
         let cmd = "Tell me /lina who won." as NSString

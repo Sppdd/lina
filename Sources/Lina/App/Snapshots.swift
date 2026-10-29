@@ -10,14 +10,12 @@ enum Snapshots {
         let dir = URL(fileURLWithPath: args[i + 1], isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        let typo = UseCase.typoSentence
-        let fix = Proofread(issues: [
-            .init(wrong: "you're", right: "your", kind: .grammar),
-            .init(wrong: "realy", right: "really", kind: .spelling),
-            .init(wrong: "apreciate", right: "appreciate", kind: .spelling),
-        ], options: ["Thank you for your help, I really appreciate it.", "Thank you for your help. I really appreciate it."])
+        let typo = UseCase.typoSentence as NSString
+        let fixes = UseCase.typoFixes.map { f in
+            Fix(range: typo.range(of: f.wrong), wrong: f.wrong, right: f.right, kind: f.kind)
+        }
         let cards: [(String, CardContent)] = [
-            ("card-corrections", .corrections(original: typo, marks: fix.marks(in: typo), options: fix.options)),
+            ("card-corrections", .corrections(fixes)),
             ("card-answer", .answer(question: "who won and how", text: "with Argentina beating France on penalties after a 3–3 draw",
                                     sources: [WebSource(title: "fifa.com", url: "https://www.fifa.com"),
                                               WebSource(title: "bbc.com", url: "https://www.bbc.com")], grounded: true)),
@@ -54,6 +52,12 @@ enum Snapshots {
                 render(CardView(content: content), size: nil, dark: dark, to: dir.appendingPathComponent("\(name)\(suffix).png"))
             }
             render(TipView(text: TipCoach.Tip.slash.text), size: nil, dark: dark, to: dir.appendingPathComponent("tip\(suffix).png"))
+            render(CommandBarLook(showing: "who won the 2022 World Cup final"), size: nil, dark: dark,
+                   to: dir.appendingPathComponent("command-bar\(suffix).png"))
+            render(HStack(spacing: 6) {
+                ForEach(Array(fixes.enumerated()), id: \.offset) { i, f in FixChip(text: f.right, key: "⌘\(i + 1)", kind: f.kind) }
+                FixChip(text: "Fix all", key: "⌘A", kind: nil)
+            }.padding(12).background(Theme.paper), size: nil, dark: dark, to: dir.appendingPathComponent("fix-chips\(suffix).png"))
             render(HStack(spacing: 18) {
                 ForEach(Mood.allCases) { mood in
                     VStack(spacing: 6) {

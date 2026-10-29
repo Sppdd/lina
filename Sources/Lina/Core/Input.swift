@@ -40,6 +40,12 @@ enum TextInserter {
         post(keyCode: CGKeyCode(kVK_Delete), unicode: nil, source: CGEventSource(stateID: .privateState))
     }
 
+    /// Presses Delete `count` times, to take back characters the writer just typed (the "/lin" of "/lina").
+    static func backspace(_ count: Int) {
+        let src = CGEventSource(stateID: .privateState)
+        for _ in 0..<max(0, count) { post(keyCode: CGKeyCode(kVK_Delete), unicode: nil, source: src) }
+    }
+
     static func copyImage(_ png: Data) {
         let pb = NSPasteboard.general
         pb.clearContents()

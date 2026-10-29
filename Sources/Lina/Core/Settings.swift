@@ -49,7 +49,7 @@ enum LinaHotKey: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-/// All user preferences, persisted to UserDefaults. API keys live in the Keychain.
+/// All user preferences, persisted to UserDefaults. Development API keys live in `Secrets`.
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
@@ -62,6 +62,10 @@ final class AppSettings: ObservableObject {
     @Published var checkSentences: Bool { didSet { d.set(checkSentences, forKey: "checkSentences") } }
     /// Little ^ hints under your text while you learn the commands.
     @Published var showTips: Bool { didSet { d.set(showTips, forKey: "showTips") } }
+    /// How long the writer has to stop typing after a sentence before Lina shows its fixes, in seconds.
+    @Published var checkDelay: Double { didSet { d.set(checkDelay, forKey: "checkDelay") } }
+    /// Typing /lina opens a small command bar at the caret instead of leaving the command in the text.
+    @Published var commandBar: Bool { didSet { d.set(commandBar, forKey: "commandBar") } }
     @Published var provider: Provider { didSet { d.set(provider.rawValue, forKey: "provider") } }
     @Published var commandModel: String { didSet { d.set(commandModel, forKey: "commandModel") } }
     @Published var checkModel: String { didSet { d.set(checkModel, forKey: "checkModel") } }
@@ -73,14 +77,16 @@ final class AppSettings: ObservableObject {
     @Published var aboutMe: String { didSet { d.set(aboutMe, forKey: "aboutMe") } }
     @Published var hotKey: LinaHotKey { didSet { d.set(hotKey.rawValue, forKey: "linaHotKey") } }
     @Published var disabledApps: Set<String> { didSet { d.set(Array(disabledApps), forKey: "disabledApps") } }
-    @Published var apiKey: String { didSet { Keychain.set(apiKey, for: "nebius-api-key") } }
-    @Published var geminiKey: String { didSet { Keychain.set(geminiKey, for: "gemini-api-key") } }
+    @Published var apiKey: String { didSet { Secrets.set(apiKey, for: "nebius-api-key") } }
+    @Published var geminiKey: String { didSet { Secrets.set(geminiKey, for: "gemini-api-key") } }
 
     private init() {
         d.register(defaults: [
             "linaEnabled": true,
             "checkSentences": true,
             "showTips": true,
+            "checkDelay": 1.2,
+            "commandBar": true,
             "provider": Provider.nebius.rawValue,
             "voice": VoicePreset.journal.rawValue,
             "linaHotKey": LinaHotKey.optionSpace.rawValue,
@@ -89,6 +95,8 @@ final class AppSettings: ObservableObject {
         enabled = d.bool(forKey: "linaEnabled")
         checkSentences = d.bool(forKey: "checkSentences")
         showTips = d.bool(forKey: "showTips")
+        checkDelay = d.double(forKey: "checkDelay")
+        commandBar = d.bool(forKey: "commandBar")
         provider = Provider(rawValue: d.string(forKey: "provider") ?? "") ?? .nebius
         // Earlier versions called these the companion and ghost-text models.
         commandModel = d.string(forKey: "commandModel") ?? d.string(forKey: "companionModel") ?? Provider.defaultCommandModel
@@ -104,15 +112,16 @@ final class AppSettings: ObservableObject {
             "com.1password.1password", "com.agilebits.onepassword7", "com.apple.keychainaccess",
             "com.bitwarden.desktop", "com.apple.Terminal", "com.googlecode.iterm2",
         ])
-        // Keys from the Keychain, falling back to the environment and then a project .env for development.
+        // Development keys: Lina's private secrets file, then the environment, then a project .env.
+        // Release builds won't hold provider keys at all; see docs/PRODUCTION.md.
         let env = ProcessInfo.processInfo.environment
         let nebiusNames = ["LINA_NEBIUS_API_KEY", "NEBIUS_API_KEY", "TOKEN-FACTOR-API"]
-        apiKey = Keychain.get("nebius-api-key")
+        apiKey = Secrets.get("nebius-api-key")
             ?? nebiusNames.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
             ?? DotEnv.first(of: nebiusNames)
             ?? ""
         let geminiNames = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "LINA_GEMINI_API_KEY"]
-        geminiKey = Keychain.get("gemini-api-key")
+        geminiKey = Secrets.get("gemini-api-key")
             ?? geminiNames.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
             ?? DotEnv.first(of: geminiNames)
             ?? ""

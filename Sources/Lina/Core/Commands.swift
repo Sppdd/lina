@@ -51,12 +51,12 @@ enum CommandParser {
 
     /// Every command, for help screens.
     static let words: [Help] = [
-        Help(word: "", usage: "/lina.", detail: "Asks you one question about what you just wrote."),
-        Help(word: "fix", usage: "/lina fix.", detail: "Checks the paragraph for typos, spelling and grammar."),
-        Help(word: "rewrite", usage: "/lina rewrite [how].", detail: "Three rewrites of the paragraph, e.g. “/lina rewrite warmer.”"),
-        Help(word: "edit", usage: "/lina edit <what to change>.", detail: "Changes the paragraph the way you say."),
+        Help(word: "", usage: "/lina ↩", detail: "Asks you one question about what you just wrote."),
+        Help(word: "fix", usage: "/lina fix", detail: "Checks the paragraph; fixes appear above the mistakes."),
+        Help(word: "rewrite", usage: "/lina rewrite [how]", detail: "Three rewrites of the paragraph, e.g. “rewrite warmer”."),
+        Help(word: "edit", usage: "/lina edit <change>", detail: "Changes the paragraph the way you say."),
         Help(word: "model", usage: "/lina model", detail: "Lists Token Factory models; switch with ⌘1–⌘9."),
-        Help(word: "image", usage: "/lina image <description>.", detail: "Makes a picture you can drop into your text."),
+        Help(word: "image", usage: "/lina image <description>", detail: "Makes a picture you can drop into your text."),
         Help(word: "saved", usage: "/lina saved", detail: "Opens everything Lina has saved."),
         Help(word: "help", usage: "/lina help", detail: "Shows this list."),
     ]
@@ -125,10 +125,27 @@ enum CommandParser {
         }
     }
 
+    /// What the writer typed in the command bar, as a command. Trailing `.` `,` `!` are dropped; `?` is kept.
+    static func parseBar(_ typed: String) -> LinaCommand.Kind {
+        var body = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        if body.lowercased().hasPrefix(trigger) { body = String(body.dropFirst(trigger.count)) }
+        var terminator: Character = "."
+        while let last = body.last, ".,!?".contains(last) {
+            if last == "?" { terminator = "?" }
+            body.removeLast()
+        }
+        return parse(body.trimmingCharacters(in: .whitespaces), terminator: terminator)
+    }
+
     /// The paragraph a command works on: the text before it on the same line, or, when the
     /// command sits on its own line, the closest paragraph above it.
     static func target(for command: LinaCommand, in text: NSString) -> NSRange? {
-        let start = command.range.location
+        target(before: command.range.location, in: text)
+    }
+
+    /// The paragraph text right before `start` on its line, or the closest paragraph above it.
+    static func target(before start: Int, in text: NSString) -> NSRange? {
+        let start = min(max(0, start), text.length)
         let para = text.paragraphRange(for: NSRange(location: start, length: 0))
         let inline = trimmed(NSRange(location: para.location, length: start - para.location), in: text)
         if inline.length > 0 { return inline }
@@ -216,6 +233,20 @@ enum Sentences {
         return range
     }
 
+    /// The last few sentences finished before the caret (most recent last), so a writer who keeps
+    /// typing past several full stops still gets each one checked.
+    static func recentFinished(in text: NSString, caret: Int, limit: Int = 3) -> [NSRange] {
+        var out: [NSRange] = []
+        var end = min(max(0, caret), text.length)
+        while out.count < limit, let r = lastFinished(in: text, caret: end, maxLookahead: 400) {
+            if out.contains(where: { NSIntersectionRange($0, r).length > 0 }) { break }
+            out.insert(r, at: 0)
+            end = r.location
+            if end == 0 { break }
+        }
+        return out
+    }
+
     private static func char(_ text: NSString, _ i: Int) -> Character {
         guard let s = Unicode.Scalar(text.character(at: i)) else { return " " }
         return Character(s)
@@ -240,10 +271,10 @@ struct Proofread: Equatable {
     }
 
     var issues: [Issue]
-    /// ⌘1 is the minimal fix; ⌘2, when present, also reads a little better.
-    var options: [String]
+    /// Whole-passage versions, if the model sent them. Lina shows word fixes, not these.
+    var options: [String] = []
 
-    var isEmpty: Bool { issues.isEmpty || options.isEmpty }
+    var isEmpty: Bool { issues.isEmpty }
 
     /// Reads the JSON the proofreading prompt asks for. Tolerates code fences and chatter around it.
     static func parse(_ raw: String, original: String) -> Proofread {
@@ -284,6 +315,52 @@ struct Proofread: Equatable {
             from = NSMaxRange(r)
         }
         return out.sorted { $0.range.location < $1.range.location }
+    }
+
+    /// The mistakes as fixes in the whole field, given where the checked passage starts.
+    func fixes(in passage: String, at offset: Int) -> [Fix] {
+        let ns = passage as NSString
+        return marks(in: passage).map { m in
+            Fix(range: NSRange(location: offset + m.range.location, length: m.range.length),
+                wrong: ns.substring(with: m.range), right: m.right, kind: m.kind)
+        }
+    }
+}
+
+/// One mistake Lina can fix by itself: a word or two in the writer's text, and what goes in its place.
+struct Fix: Equatable {
+    /// Where the mistake is in the field's text (UTF-16 offsets).
+    var range: NSRange
+    var wrong: String
+    var right: String
+    var kind: Proofread.Kind
+}
+
+enum Fixes {
+    /// After `applied` went in, moves the fixes behind it by how much it changed the length.
+    static func shift(_ fixes: [Fix], after applied: Fix) -> [Fix] {
+        let delta = (applied.right as NSString).length - applied.range.length
+        return fixes.map { f in
+            var f = f
+            if f.range.location >= NSMaxRange(applied.range) { f.range.location += delta }
+            return f
+        }
+    }
+
+    /// One replacement covering every fix: the span from the first mistake to the last, with all of them corrected.
+    /// `text` is the field's text the fixes point into.
+    static func all(_ fixes: [Fix], in text: NSString) -> (span: NSRange, replacement: String)? {
+        let sorted = fixes.sorted { $0.range.location < $1.range.location }
+        guard let first = sorted.first, let last = sorted.last, NSMaxRange(last.range) <= text.length else { return nil }
+        let span = NSRange(location: first.range.location, length: NSMaxRange(last.range) - first.range.location)
+        var out = ""
+        var at = span.location
+        for f in sorted where f.range.location >= at {
+            out += text.substring(with: NSRange(location: at, length: f.range.location - at))
+            out += f.right
+            at = NSMaxRange(f.range)
+        }
+        return (span, out)
     }
 }
 

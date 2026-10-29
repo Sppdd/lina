@@ -96,7 +96,7 @@ private struct MeetLinaPage: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Meet Lina.")
                         .font(Theme.serif(38, weight: .semibold))
-                    Text("She lives at your cursor in every app, and speaks only when you ask. Type /lina, finish with a comma or a dot, and she answers right there.")
+                    Text("She lives at your cursor in every app, and speaks only when you ask. Type /lina anywhere and a small bar opens: ask, press Return, and her answer waits for your ⌘1.")
                         .font(.system(size: 15))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -144,7 +144,7 @@ private struct MeetLinaPage: View {
                         }
                     }
                     HStack(alignment: .firstTextBaseline, spacing: 14) {
-                        Text("/lina <any question>,")
+                        Text("/lina <any question> ↩")
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .foregroundStyle(Theme.ink)
                             .frame(width: 230, alignment: .leading)
@@ -156,7 +156,7 @@ private struct MeetLinaPage: View {
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .foregroundStyle(Theme.ink)
                             .frame(width: 230, alignment: .leading)
-                        Text("Same as /lina, without typing it.").font(.system(size: 13)).foregroundStyle(.secondary)
+                        Text("Opens the same bar, without typing /lina.").font(.system(size: 13)).foregroundStyle(.secondary)
                     }
                 }
                 .padding(16)
@@ -172,7 +172,7 @@ private struct MeetLinaPage: View {
                 .foregroundStyle(Theme.ink)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Your words stay yours.").font(.system(size: 14, weight: .semibold))
-                Text("Lina never types into your text on her own. Her answers wait in a card until you press ⌘1, ⌘2 or ⌘3. Esc leaves everything as you wrote it, and ⌘Z undoes a choice.")
+                Text("Lina never types into your text on her own. Fixes sit above your mistakes and answers wait in a card until you press ⌘1, ⌘2… (⌘A takes every fix). Esc leaves everything as you wrote it, and ⌘Z undoes a choice.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -190,7 +190,7 @@ private struct UseCasesPage: View {
         VStack(alignment: .leading, spacing: 26) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("What she's good at").font(Theme.serif(30, weight: .semibold))
-                Text("Six moments where Lina earns her place. Each one plays on a loop; try the line under it in any app.")
+                Text("Six moments where Lina earns her place. Each one plays on a loop; try the line under it in any app (↩ means press Return in the bar).")
                     .font(.system(size: 14)).foregroundStyle(.secondary)
             }
             ForEach(UseCase.all) { useCase in
@@ -457,9 +457,9 @@ enum TryIt {
 
             1. Finish this sentence with a dot and watch for a card: Thank you for you're help, I realy apreciate it
 
-            2. Ask the web mid-sentence, ending with a comma: The tallest mountain in Africa is /lina which mountain and how tall,
+            2. Ask the web mid-sentence. Type the start, then /lina, then your question in the bar and Return: The tallest mountain in Africa is /lina which mountain and how tall
 
-            3. Ask for a question about your thinking: I keep putting off this decision because /lina.
+            3. Ask for a question about your thinking. After a thought, type /lina and press Return: I keep putting off this decision because
 
             4. Switch models: /lina model
 

@@ -21,9 +21,33 @@ final class AnswerTests: XCTestCase {
     func testProofreadWithNoMistakesIsEmpty() {
         XCTAssertTrue(Proofread.parse(#"{"issues":[]}"#, original: "All good here.").isEmpty)
         XCTAssertTrue(Proofread.parse("Looks fine to me!", original: "All good here.").isEmpty)
-        // An option identical to the original isn't a fix.
-        let same = Proofread.parse(#"{"issues":[{"wrong":"x","right":"y"}],"fixed":"All good here."}"#, original: "All good here.")
-        XCTAssertTrue(same.isEmpty)
+        // A "mistake" that isn't in the sentence gives no fix to show.
+        let phantom = Proofread.parse(#"{"issues":[{"wrong":"x","right":"y"}]}"#, original: "All good here.")
+        XCTAssertTrue(phantom.fixes(in: "All good here.", at: 0).isEmpty)
+    }
+
+    func testFixesPointIntoTheField() {
+        let sentence = "I realy like it."
+        let p = Proofread.parse(#"{"issues":[{"wrong":"realy","right":"really","kind":"spelling"}]}"#, original: sentence)
+        let fixes = p.fixes(in: sentence, at: 10)
+        XCTAssertEqual(fixes, [Fix(range: NSRange(location: 12, length: 5), wrong: "realy", right: "really", kind: .spelling)])
+    }
+
+    func testShiftAfterOneFixGoesIn() {
+        let a = Fix(range: NSRange(location: 2, length: 5), wrong: "realy", right: "really", kind: .spelling)
+        let b = Fix(range: NSRange(location: 13, length: 3), wrong: "teh", right: "the", kind: .spelling)
+        let shifted = Fixes.shift([b], after: a)
+        XCTAssertEqual(shifted.first?.range, NSRange(location: 14, length: 3))
+    }
+
+    func testFixAllIsOneReplacement() throws {
+        let text = "Thank you for you're help, I realy apreciate it." as NSString
+        let fixes = [("you're", "your"), ("realy", "really"), ("apreciate", "appreciate")].map { w, r in
+            Fix(range: text.range(of: w), wrong: w, right: r, kind: .spelling)
+        }
+        let all = try XCTUnwrap(Fixes.all(fixes, in: text))
+        XCTAssertEqual(text.substring(with: all.span), "you're help, I realy apreciate")
+        XCTAssertEqual(all.replacement, "your help, I really appreciate")
     }
 
     func testFitAndAnswer() {

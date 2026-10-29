@@ -7,8 +7,9 @@ enum CardContent: Equatable {
     case working(String)
     /// `/lina`: one question for the writer.
     case question(String)
-    /// A finished sentence (or `/lina fix`) with mistakes highlighted and fixed versions to choose.
-    case corrections(original: String, marks: [Proofread.Mark], options: [String])
+    /// Word fixes, listed. Used when the app can't say where the words are on screen;
+    /// otherwise the fixes sit right on top of the mistakes (`FixPanel`).
+    case corrections([Fix])
     /// A search answer that can replace the question in the sentence.
     case answer(question: String, text: String, sources: [WebSource], grounded: Bool)
     /// Rewrites or an edit to choose from.
@@ -47,8 +48,8 @@ enum CardContent: Equatable {
         switch self {
         case .working: "Lina"
         case .question: "Lina asks"
-        case let .corrections(_, marks, _):
-            marks.count == 1 ? "1 mistake" : marks.isEmpty ? "A better way to say it" : "\(marks.count) mistakes"
+        case let .corrections(fixes):
+            fixes.count == 1 ? "1 mistake" : "\(fixes.count) mistakes"
         case let .answer(_, _, _, grounded): grounded ? "From the web" : "From the model"
         case let .choices(title, _, _): title
         case .models: "Models"
@@ -106,14 +107,24 @@ struct CardView: View {
                 .font(Theme.serif(17, weight: .medium))
                 .foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
-        case let .corrections(original, marks, options):
-            VStack(alignment: .leading, spacing: 10) {
-                Self.marked(original, marks)
-                    .font(Theme.serif(14.5))
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !marks.isEmpty { legend(marks) }
-                optionList(options, labels: ["Fix", "Fix and smooth"])
+        case let .corrections(fixes):
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(fixes.enumerated()), id: \.offset) { i, fix in
+                    Button { onChoose?(i + 1) } label: {
+                        HStack(spacing: 9) {
+                            KeyCap(i < 9 ? "⌘\(i + 1)" : "·", size: 10)
+                            Text(fix.wrong).strikethrough(true, color: Self.color(fix.kind)).foregroundStyle(.secondary)
+                            Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.tertiary)
+                            Text(fix.right).fontWeight(.semibold).foregroundStyle(Self.color(fix.kind))
+                            Spacer(minLength: 0)
+                        }
+                        .font(Theme.serif(14.5))
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.035)))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         case let .answer(question, text, sources, grounded):
             VStack(alignment: .leading, spacing: 8) {
@@ -177,7 +188,7 @@ struct CardView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Text("Anything else after /lina is a web search, answered to fit your sentence.")
+                Text("Anything else you type in the bar is a web search, answered to fit your sentence.")
                     .font(.system(size: 11.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -190,8 +201,8 @@ struct CardView: View {
         switch content {
         case .working: return [("esc", "Stop")]
         case .question: return [("esc", "Got it")]
-        case let .corrections(_, _, options):
-            return options.count > 1 ? [("⌘1", "Fix"), ("⌘2", "Smoother"), ("esc", "Keep mine")] : [("⌘1", "Fix"), ("esc", "Keep mine")]
+        case let .corrections(fixes):
+            return fixes.count > 1 ? [("⌘1–⌘\(min(9, fixes.count))", "Fix one"), ("⌘A", "Fix all"), ("esc", "Keep mine")] : [("⌘1", "Fix"), ("esc", "Keep mine")]
         case let .answer(_, _, sources, _):
             return sources.isEmpty ? [("⌘1", "Insert"), ("esc", "Dismiss")] : [("⌘1", "Insert"), ("⌘2", "With source"), ("esc", "Dismiss")]
         case let .choices(_, _, options): return [("⌘1–⌘\(max(1, options.count))", "Use"), ("esc", "Keep mine")]
@@ -284,42 +295,12 @@ struct CardView: View {
         }
     }
 
-    private func legend(_ marks: [Proofread.Mark]) -> some View {
-        HStack(spacing: 10) {
-            ForEach([Proofread.Kind.spelling, .grammar, .punctuation], id: \.self) { kind in
-                let n = marks.filter { $0.kind == kind }.count
-                if n > 0 {
-                    HStack(spacing: 4) {
-                        Circle().fill(Self.color(kind)).frame(width: 6, height: 6)
-                        Text("\(n) \(kind.rawValue)").font(.system(size: 10.5)).foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
     static func color(_ kind: Proofread.Kind) -> Color {
         switch kind {
         case .spelling: Mood.worried.hair
         case .grammar: Mood.found.hair
         case .punctuation: Mood.listening.hair
         }
-    }
-
-    /// The writer's sentence with each mistake colored and underlined.
-    static func marked(_ s: String, _ marks: [Proofread.Mark]) -> Text {
-        let ns = s as NSString
-        var out = Text("")
-        var at = 0
-        for m in marks where m.range.location >= at && NSMaxRange(m.range) <= ns.length {
-            out = out + Text(ns.substring(with: NSRange(location: at, length: m.range.location - at)))
-            out = out + Text(ns.substring(with: m.range))
-                .foregroundStyle(color(m.kind))
-                .underline(true, color: color(m.kind))
-                .bold()
-            at = NSMaxRange(m.range)
-        }
-        return out + Text(ns.substring(from: min(at, ns.length)))
     }
 }
 
@@ -367,7 +348,8 @@ struct FlowLayout: Layout {
 
 // MARK: - Panels
 
-private func floatingPanel(clickThrough: Bool) -> NSPanel {
+/// A borderless panel that floats over every app without taking focus.
+func floatingPanel(clickThrough: Bool) -> NSPanel {
     let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
     panel.isOpaque = false
     panel.backgroundColor = .clear
@@ -380,7 +362,8 @@ private func floatingPanel(clickThrough: Bool) -> NSPanel {
     return panel
 }
 
-private func screen(containing rect: CGRect) -> NSRect {
+/// The visible frame of the screen showing `rect`.
+func screen(containing rect: CGRect) -> NSRect {
     let screen = NSScreen.screens.first { $0.frame.contains(CGPoint(x: rect.midX, y: rect.midY)) } ?? NSScreen.main
     return screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
 }

@@ -73,16 +73,18 @@ enum Prompts {
         return [.system(sys), .user(user)]
     }
 
-    /// The check that runs when a sentence ends, and `/lina fix`.
+    /// The check that runs when the writer stops typing after a sentence, and `/lina fix`.
+    /// Asks for the smallest spans, so each fix can sit on top of the word it corrects.
     static func proofread(_ passage: String, before: String) -> [ChatMessage] {
         let sys = """
         You are a careful proofreader. Find only real mistakes in the passage: spelling, typos, grammar, \
         wrong words, and punctuation. Ignore style, names, slang and anything clearly intentional. \
         Never change meaning or voice.
+        Each mistake must be as SHORT as possible: the single word (or two or three words) that is wrong, \
+        copied exactly from the passage, and only what replaces it. For missing punctuation, include the word \
+        before it (e.g. wrong "Hello" right "Hello,").
         Reply with JSON only, no code fences:
-        {"issues":[{"wrong":"exact text copied from the passage","right":"the correction","kind":"spelling|grammar|punctuation"}],\
-        "fixed":"the passage with only those mistakes fixed",\
-        "better":"the passage fixed and slightly clearer, same meaning and voice"}
+        {"issues":[{"wrong":"exact text copied from the passage","right":"the correction","kind":"spelling|grammar|punctuation"}]}
         If there are no mistakes, reply {"issues":[]}.
         """
         var user = ""

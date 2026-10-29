@@ -27,7 +27,7 @@ struct MenuBarView: View {
             VStack(spacing: 0) {
                 ToggleRow(title: "Lina is on", subtitle: "Answers /lina in any app", isOn: $settings.enabled)
                 Divider().padding(.leading, 12)
-                ToggleRow(title: "Check sentences", subtitle: "Typos and grammar when you type a dot", isOn: $settings.checkSentences)
+                ToggleRow(title: "Check sentences", subtitle: "Fixes above your mistakes when you pause", isOn: $settings.checkSentences)
                 if !engine.currentApp.bundleID.isEmpty {
                     Divider().padding(.leading, 12)
                     ToggleRow(title: "Pause in \(engine.currentApp.name)", subtitle: nil, isOn: Binding(
@@ -43,7 +43,7 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("TYPE IN ANY APP").font(.system(size: 9.5, weight: .semibold)).tracking(0.6).foregroundStyle(.tertiary)
                 FlowLayout(spacing: 6) {
-                    ForEach(["/lina.", "/lina fix.", "/lina rewrite.", "/lina model", "/lina <question>,"], id: \.self) { c in
+                    ForEach(["/lina ↩", "/lina fix", "/lina rewrite polite", "/lina model", "/lina <question>"], id: \.self) { c in
                         Text(c)
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundStyle(Theme.ink)
@@ -92,7 +92,7 @@ struct MenuBarView: View {
         let app = engine.currentApp.name
         switch engine.status {
         case .ready: return app.isEmpty ? "Ready when you are" : "Ready in \(app)"
-        case .listening: return "Listening… end with . , ? or Return"
+        case .listening: return settings.commandBar ? "Listening… type in the bar, then Return" : "Listening… end with . , ? or Return"
         case let .working(label): return label
         case .waiting: return "Waiting for your ⌘ choice"
         case .off: return "Off"
