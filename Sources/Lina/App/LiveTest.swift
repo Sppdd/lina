@@ -40,22 +40,29 @@ enum LiveTest {
         quitTextEdit = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").isEmpty
 
         let sentence = "Thank you for you're help, I realy apreciate it."
-        var ready = false
+        let typos = ["realy", "apreciate"]
+        // macOS autocorrect may fix some of the typos as they're typed (it turned "realy" into "really" on one Mac),
+        // so the test works with whatever landed, as long as a typo is still there for Lina to find.
+        var landed = ""
         for attempt in 1...4 {
             guard await freshDocument() else { say("Attempt \(attempt): TextEdit not ready, retrying"); continue }
             say("Typing a sentence with mistakes…")
             engine.dismiss()
             await typeAsUser(sentence)
+            try? await Task.sleep(for: .milliseconds(300))
             let snap = AX.snapshot(requireCaret: false)
-            if let snap, (snap.text as String) == sentence {
-                ready = true
+            let got = (snap?.text as String?) ?? ""
+            if got.hasPrefix("Thank you for"), got.hasSuffix("it."), abs(got.count - sentence.count) <= 4 {
+                landed = got
                 break
             }
-            let got = (snap?.text as String?) ?? "(unreadable)"
             say("Attempt \(attempt): keystrokes didn't all land in “\(snap?.windowTitle ?? "?")”: got \(got.count) chars “\(got.prefix(60))”, retrying")
             closeDocument()
         }
-        guard ready else { say("Could not get a clean TextEdit document"); return false }
+        guard !landed.isEmpty else { say("Could not get a clean TextEdit document"); return false }
+        let left = typos.filter { landed.contains($0) }
+        if landed != sentence { say("Autocorrect changed the sentence to “\(landed)”") }
+        guard !left.isEmpty else { say("Autocorrect fixed every typo before Lina could; turn off Correct Spelling Automatically"); return false }
 
         // Wait for the fixes to appear over the mistakes.
         let t0 = Date()
@@ -72,14 +79,14 @@ enum LiveTest {
         postKey(CGKeyCode(kVK_ANSI_A), flags: .maskCommand)
         try? await Task.sleep(for: .seconds(1.5))
         let fixed = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
-        guard fixed.contains("really"), !fixed.contains("realy") else { say("⌘A did not apply the fixes: “\(fixed)”"); return false }
+        guard !fixed.isEmpty, left.allSatisfy({ !fixed.contains($0) }) else { say("⌘A did not apply the fixes: “\(fixed)”"); return false }
         say("Fixed ✓ “\(fixed)”")
 
         say("Typing /lina help in the text, then Return…")
         await typeAsUser("\n/lina help")
         try? await Task.sleep(for: .seconds(0.4))
         let typed = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
-        guard typed.hasSuffix("/lina help") else { say("The command didn't stay in the text while typing: “\(typed)”"); return false }
+        guard typed.lowercased().hasSuffix("/lina help") else { say("The command didn't stay in the text while typing: “\(typed)”"); return false }
         guard engine.status == .listening else { say("Lina wasn't listening to the command (status: \(engine.status))"); return false }
         await typeAsUser("\n")
         let t1 = Date()
