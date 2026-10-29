@@ -89,6 +89,48 @@ final class AnswerTests: XCTestCase {
         XCTAssertEqual(a.text, "FIT: Lima\nANSWER: Lima is the capital of Peru.")
         XCTAssertEqual(a.sources.map(\.site), ["britannica.com", "wikipedia.org"])
         XCTAssertEqual(a.queries, ["capital of peru"])
+        XCTAssertEqual(a.suggestionsHTML, "")
+    }
+
+    func testGeminiSearchSuggestionsAreKept() {
+        let json = """
+        {"candidates":[{"content":{"parts":[{"text":"FIT: Lima"}]},
+          "groundingMetadata":{"searchEntryPoint":{"renderedContent":"<div class=\\"chip\\">capital of peru</div>"}}}]}
+        """
+        let a = GeminiClient.parse(Data(json.utf8))
+        XCTAssertEqual(a.suggestionsHTML, "<div class=\"chip\">capital of peru</div>")
+    }
+
+    func testGeminiRequestKeepsThinkingShort() {
+        let three = GeminiClient.body(model: "gemini-3.5-flash-lite", system: "s", prompt: "p")
+        let config3 = three["generationConfig"] as? [String: Any]
+        XCTAssertEqual((config3?["thinkingConfig"] as? [String: String])?["thinkingLevel"], "low")
+        XCTAssertNotNil(three["tools"])
+        let old = GeminiClient.body(model: "gemini-2.5-flash", system: "s", prompt: "p")
+        let config25 = old["generationConfig"] as? [String: Any]
+        XCTAssertEqual((config25?["thinkingConfig"] as? [String: Int])?["thinkingBudget"], 0)
+    }
+
+    func testServerRefusalsReadAsPlainWords() {
+        let body = #"{"error":"You've used today's 20 searches. They come back at midnight UTC."}"#
+        XCTAssertEqual(LLMError.http(429, body).errorDescription, "You've used today's 20 searches. They come back at midnight UTC.")
+        XCTAssertEqual(LLMError.http(403, #"{"error":"flux-dev isn't available for pictures."}"#).errorDescription,
+                       "flux-dev isn't available for pictures.")
+        XCTAssertEqual(LLMError.http(429, "slow down").errorDescription, "Lina is busy right now. Try again in a moment.")
+    }
+
+    func testAccountUsageAndAuthErrors() {
+        let usage = Account.usage(from: ["plan": "free", "usage": [
+            ["kind": "search", "used": 3, "limit": 20],
+            ["kind": "image", "used": 0, "limit": 5],
+        ]])
+        XCTAssertEqual(usage.plan, "free")
+        XCTAssertEqual(usage.lines.map(\.kind), ["search", "image"])
+        XCTAssertEqual(usage.lines.first?.used, 3)
+        XCTAssertEqual(Account.message(["msg": "Token has expired or is invalid"], code: 403),
+                       "That code didn't work or has expired. Ask for a new one.")
+        XCTAssertEqual(Account.message(["msg": "For security purposes, you can only request this after 30 seconds."], code: 429),
+                       "Too many codes asked for. Wait a minute, then try again.")
     }
 
     func testThinkFilterAcrossChunks() {

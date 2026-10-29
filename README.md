@@ -29,7 +29,7 @@
 
 Most AI writing tools interrupt you. Lina waits.
 
-Type `/lina` in **any app** (Notes, Mail, Slack, a browser) and a small bar opens right at your cursor. Ask a question or give a command there, press Return, and the bar disappears. Your command never lands in your text, so there's nothing to delete. The answer waits in a card under your line: a fact from the web worded to fit your sentence, a question that makes you think, three rewrites, or a picture. **Nothing goes into your text until you press ⌘1, ⌘2 or ⌘3.** Esc leaves your words exactly as they were.
+Type `/lina` and what you want right in your text, in **any field of any app** (Notes, Mail, Slack, a browser's search box). Lina tints and underlines the command so it reads as hers, not yours. Press Return and she gets to work; Return never reaches the app, so a search box won't submit. The answer waits in a card under your line: a fact from the web worded to fit your sentence, a question that makes you think, three rewrites, or a picture. **Nothing goes into your text until you press ⌘1, ⌘2 or ⌘3**, and then the answer takes the command's place, so there's nothing to delete. Esc takes the command back out and leaves your words exactly as they were.
 
 When you pause after finishing a sentence, Lina quietly checks it. If something's wrong, a small chip with the right word appears **right above each mistake**: ⌘1, ⌘2… fixes one, ⌘A fixes them all. If nothing's wrong, you never notice her. You choose how long she waits after you stop typing.
 
@@ -44,15 +44,17 @@ Under the hood: **NVIDIA Nemotron on Nebius Token Factory** for checks and comma
 | Do this | Lina does this |
 |---|---|
 | Finish a sentence and pause | Checks it. The right word appears above each mistake; ⌘1, ⌘2… fixes one, ⌘A fixes all. |
-| `The final ended /lina` → *who won and how* ↩ | Searches the web. ⌘1 puts an answer that fits at your cursor: *"…ended with Argentina beating France on penalties"*. ⌘2 adds the source. |
+| `The final ended /lina who won and how` ↩ | Searches the web. ⌘1 swaps the command for an answer that fits: *"…ended with Argentina beating France on penalties"*. ⌘2 adds the source. |
 | `/lina` ↩ (nothing else) | One short question about what you just wrote. |
-| `/lina` → *fix* ↩ | Checks the whole paragraph. |
-| `/lina` → *rewrite polite* ↩ | Three rewrites of the paragraph in that tone; pick with ⌘1–⌘3. |
-| `/lina` → *edit make it shorter* ↩ | The paragraph, changed the way you asked. |
-| `/lina` → *model* ↩ | Every writing and image model on Token Factory; switch with ⌘1–⌘9. |
-| `/lina` → *image a reading nook at dusk* ↩ | A picture; ⌘1 drops it at your cursor. |
-| `/lina` → *saved* / *help* ↩ | Opens Saved / lists the commands. |
-| `⌥ Space` | Opens the same bar without typing `/lina`. |
+| `/lina fix` ↩ | Checks the whole paragraph. |
+| `/lina rewrite polite` ↩ | Three rewrites of the paragraph in that tone; pick with ⌘1–⌘3. |
+| `/lina edit make it shorter` ↩ | The paragraph, changed the way you asked. |
+| `/lina model` ↩ | Every writing and image model available; switch with ⌘1–⌘9. |
+| `/lina image a reading nook at dusk` ↩ | A picture; ⌘1 puts it where the command was. |
+| `/lina saved` / `/lina help` ↩ | Opens Saved / lists the commands. |
+| `⌥ Space` | Types `/lina ` for you, ready for what you want. |
+
+A pause after `,` `.` or `!` also runs a command, so you can keep the rhythm of a sentence. Commands that only talk to Lina (`/lina`, `model`, `help`, `saved`) take themselves out of your text as they run. Fields Lina can't read (some web search boxes) still work: she follows your keystrokes and puts the answer where the command was.
 
 The first time you use each part, a small tip appears under your own text with a `^` pointing at it.
 
@@ -70,7 +72,7 @@ scripts/build-app.sh --open      # builds build/Lina.app and launches it
 On first launch, onboarding walks you through:
 
 1. **Accessibility access**, so Lina can read the line you're typing when you ask (System Settings → Privacy & Security → Accessibility).
-2. **Keys.** Paste them in onboarding or Settings, or put them in a `.env` file at the repo root:
+2. **Sign in, or keys.** When the build is connected to a Lina server (Supabase), you sign in with an emailed code and need no keys. For development without a server, paste keys in onboarding or Settings, or put them in a `.env` file at the repo root:
    ```sh
    NEBIUS_API_KEY=…    # tokenfactory.nebius.com: checks, commands, /lina model, /lina image
    GEMINI_API_KEY=…    # aistudio.google.com/apikey: live web answers (optional)
@@ -99,7 +101,7 @@ swift build
 | Commands | [`nvidia/nemotron-3-super-120b-a12b`](https://tokenfactory.nebius.com) | `/lina` questions, rewrites, edits. Switch with `/lina model`. |
 | Sentence checks | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Fast proofreading of each finished sentence, as JSON. |
 | Pictures | `black-forest-labs/flux-schnell` | `/lina image`. |
-| Web answers | Google `gemini-2.5-flash` + Search grounding | Questions after `/lina`, with sources. |
+| Web answers | Google Gemini Flash-Lite + Search grounding | Questions after `/lina`, with sources and Google's search suggestions. |
 
 Lina talks to Token Factory through its OpenAI-compatible endpoints (`/chat/completions`, `/images/generations`, `/models`). Nemotron's reasoning mode is turned off (`/no_think`, `enable_thinking: false`) and any `<think>` spans are filtered out, so answers come back fast.
 
@@ -107,7 +109,7 @@ Lina talks to Token Factory through its OpenAI-compatible endpoints (`/chat/comp
 
 ```
  Any app (Notes, Mail, Safari, …)
-        │  keystrokes (CGEventTap): "/lina" opens the command bar; a pause after a sentence starts a check
+        │  keystrokes (CGEventTap): "/lina …" is marked in place, Return runs it; a pause after a sentence starts a check
         ▼
  ┌──────────────┐  reads the field (AXUIElement)  ┌──────────────────────────────┐
  │ LinaEngine   │ ──────────────────────────────▶ │ Nemotron · FLUX · Gemini     │
@@ -121,9 +123,9 @@ Lina talks to Token Factory through its OpenAI-compatible endpoints (`/chat/comp
 Sources/Lina
 ├── App/      LinaApp (menu bar face, windows), self-test, live test, snapshot renderer
 ├── Core/     Commands (parser, sentences, proofread JSON), prompts, Token Factory + Gemini clients,
-│             Accessibility reader, event tap and text insertion, settings, keychain, history
+│             Accessibility reader, event tap and text insertion, settings, secrets, account, history
 ├── Engine/   LinaEngine, Writer (puts choices into the text), tips
-├── UI/       Cards, menu bar, Lina's window, use-case demos, onboarding, settings
+├── UI/       Cards, command mark, fix chips, menu bar, Lina's window, demos, onboarding, settings
 └── Design/   Lina's face and moods, theme
 ```
 
@@ -131,7 +133,7 @@ Sources/Lina
 
 - Lina reads only when you type `/lina` or finish a sentence, never password fields or secure input, and you can pause her per app.
 - What's sent: the finished sentence for checks; the paragraph for commands; the question and nearby words to Gemini for search; only the description for pictures. Settings → Privacy spells it out.
-- No account, telemetry or analytics in this developer build. Development keys are kept in a file only your user can read. Saved items are a JSON file on your Mac.
+- No telemetry or analytics. Signed in, requests go through Lina's server (`supabase/functions/lina-ai`), which holds the provider keys and keeps only daily counts, never your text. Development keys are kept in a file only your user can read. Saved items are a JSON file on your Mac.
 
 ## Develop
 

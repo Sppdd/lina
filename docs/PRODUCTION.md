@@ -7,6 +7,10 @@ and **Supabase** for accounts, limits and the server that holds the keys.
 > Facts marked *(verify)* came from search results, not from reading the provider's page directly.
 > Check them on the linked pages before you rely on them.
 
+> **Status (Phase 1 built, not yet deployed):** the app signs people in with an emailed code and sends every request
+> through the `lina-ai` Edge Function when it's connected to a Supabase project. The database migration, the function
+> and the email template are in [`supabase/`](../supabase). Section 8 has the deploy steps.
+
 ## The short answer
 
 Yes, Token Factory can carry Lina in production, but **the app must never hold the Nebius or Gemini keys**.
@@ -65,16 +69,19 @@ One function with a few routes keeps it simple to deploy and audit.
 
 | Route | Does | Provider |
 |---|---|---|
-| `POST /check` | Proofreads a sentence and returns the JSON fixes | Nebius, Nemotron Nano (or Lightning) |
-| `POST /command` | `/lina` question, rewrite, edit; streams back | Nebius, Nemotron Super |
+| `POST /v1/chat/completions` | Sentence checks (`x-lina-task: check`) and `/lina` question, rewrite, edit; streams back | Nebius, Nemotron Nano / Super |
+| `POST /v1/images/generations` | One picture | Nebius, FLUX |
+| `GET /v1/models` | The models this server allows, for `/lina model` | (allowlist) |
 | `POST /search` | Grounded answer + sources + Google's Search Suggestions | Gemini + `google_search` |
-| `POST /image` | One picture | Nebius, FLUX |
-| `GET /models` | The allowed model list for `/lina model` (cached) | Nebius `/v1/models`, filtered |
+| `GET /usage` | Today's use and the plan's limits, for Settings → Account | Postgres |
+
+The Nebius routes keep the OpenAI shape, so the app's existing client only swaps its base URL and token.
 
 Each request:
-1. **Checks the user.** Keep `verify_jwt` on, and also check the user inside the function. Supabase's
-   [Securing Edge Functions](https://supabase.com/docs/guides/functions/auth) guide explains why: the platform
-   check alone also accepts the anon key.
+1. **Checks the user.** The function asks Supabase Auth who the token belongs to (`/auth/v1/user`) and refuses
+   the anon key. The platform's own `verify_jwt` check is off in `supabase/config.toml`, because it doesn't accept
+   tokens signed with Supabase's newer JWT signing keys; see
+   [Securing Edge Functions](https://supabase.com/docs/guides/functions/auth).
 2. **Checks the quota** with one Postgres call (`consume(user, kind, units)`), which records usage and refuses with
    HTTP 429 when the user's plan limit is reached. Rate limiting is up to us; Supabase doesn't do it for you.
 3. **Caps the input** (characters per request) and **allows only listed models**, so a modified client can't run
@@ -123,9 +130,9 @@ cached so the picker always opens.
 
 ## 4. Gemini grounding in production
 
-**The model.** The app uses `gemini-2.5-flash` today. Google now points new projects at the current models
-(Flash 3.x / Flash-Lite 3.x), and 2.5 grounding is billed per prompt at a higher rate. Move to the current
-Flash-Lite for search and confirm the exact model ID on the [models page](https://ai.google.dev/gemini-api/docs/models) *(verify)*.
+**The model.** Lina now defaults to `gemini-3.5-flash-lite` with thinking kept low (it used `gemini-2.5-flash`,
+and earlier settings are moved over). On the server it's the `GEMINI_MODEL` secret, so it can change without an
+update. Confirm the exact model ID on the [models page](https://ai.google.dev/gemini-api/docs/models) *(verify)*.
 
 **Price and the daily cap** ([pricing](https://ai.google.dev/gemini-api/docs/pricing), *verify*): on Gemini 3 and newer,
 5,000 grounded requests a month are free across the project, then **$14 per 1,000**. There's also a **default cap of
@@ -179,10 +186,51 @@ Settings → Billing and Actions, or use a self-hosted runner on your Mac.
 
 ## 7. Open questions for you
 
+Starting limits are in the migration (`plans` table): Free gets 300 checks, 40 commands, 20 searches and 5 pictures
+a day; Plus gets 2,000 / 400 / 150 / 40. Change them with one `update public.plans …` and no app update.
+
+
 1. Free plan limits: how many checks, commands, searches and pictures per day?
 2. Paid plan at launch, or later?
 3. Keep "On this Mac" (local models) in release builds as a privacy option? It needs no server but can't do search or pictures.
 4. Should Saved ever sync between Macs? (Affects what Google's terms allow us to store.)
+
+## 8. Deploy, step by step
+
+You run these on your Mac, in the repo. Nothing secret is typed into the app or committed.
+
+1. Create the project at supabase.com, then link it:
+   ```sh
+   brew install supabase/tap/supabase
+   supabase login
+   supabase link --project-ref <your-project-ref>
+   ```
+2. Create the tables, limits and functions:
+   ```sh
+   supabase db push
+   ```
+3. Give the server its provider keys (only Supabase sees them):
+   ```sh
+   supabase secrets set NEBIUS_API_KEY=… GEMINI_API_KEY=…
+   ```
+   Optional: `GEMINI_MODEL`, and `LINA_CHECK_MODELS`, `LINA_COMMAND_MODELS`, `LINA_IMAGE_MODELS` (comma-separated)
+   to change which models people can use.
+4. Deploy the gateway:
+   ```sh
+   supabase functions deploy lina-ai
+   ```
+5. **Make the sign-in email show a code.** Supabase's default email sends a link. In the dashboard, Authentication →
+   Emails → *Magic link*, paste [`supabase/templates/magic_link.html`](../supabase/templates/magic_link.html) (it shows
+   `{{ .Token }}`), or run `supabase config push`. For real users, set up custom SMTP: the built-in sender is
+   rate-limited and meant for testing.
+6. Connect the app. Add the public values to `.env` (or the environment) and rebuild:
+   ```sh
+   SUPABASE_URL=https://<your-project-ref>.supabase.co
+   SUPABASE_ANON_KEY=<publishable key>
+   ```
+   `scripts/build-app.sh` writes them into Lina's Info.plist, so a release build carries them for everyone.
+7. Open Lina → Settings → Account, enter your email, type the code. `/lina help`, a sentence check and a search
+   should now work with no keys on the Mac, and Settings → Account shows today's counts.
 
 ## Sources
 

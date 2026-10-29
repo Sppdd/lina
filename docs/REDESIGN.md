@@ -4,8 +4,10 @@ This is the plan behind the second version of Lina, written from the owner's not
 Each section says what was asked, what Lina does now, and where the gaps were filled.
 
 > **Update:** corrections now sit as small chips right above each mistake (⌘1, ⌘2… one, ⌘A all), after a pause
-> you set in Settings; and `/lina` opens a command bar at the cursor instead of living in your text.
-> Production plans are in [PRODUCTION.md](PRODUCTION.md).
+> you set in Settings. `/lina` stays in your own text but is marked as Lina's (tinted and underlined, with a small
+> "↩ run" tag); Return runs it and never reaches the app, and the answer takes the command's place. It works in any
+> field, including ones Lina can't read, like some web search boxes. People sign in with an emailed code; see
+> [PRODUCTION.md](PRODUCTION.md).
 
 ## The idea in one line
 
@@ -114,8 +116,9 @@ Now:
   the question) and a plain one-sentence **answer** for Saved.
 - The card shows the fit and the source sites. **⌘1** replaces `/lina …` with it, keeping your comma or dot;
   **⌘2** adds the source in parentheses.
-- Keys are read from the Keychain, the environment, or `.env`: `GEMINI_API_KEY` (or `GOOGLE_API_KEY`).
-  The model defaults to `gemini-2.5-flash` with thinking off, for speed.
+- Signed in, searches go through Lina's server. In development, the key comes from Settings, the environment, or
+  `.env`: `GEMINI_API_KEY` (or `GOOGLE_API_KEY`). The model defaults to `gemini-3.5-flash-lite` with thinking kept low.
+- Google's Search Suggestions are shown under every grounded answer, as Google's terms require.
 - Without a Gemini key, the Nebius model answers from memory and the card says it wasn't checked against the web.
 
 ## 7. `/lina model`, including image models

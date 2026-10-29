@@ -1,0 +1,23 @@
+# Supabase settings for Lina. `supabase link` connects this folder to the hosted project;
+# `supabase config push` sends the [auth] part there. See docs/PRODUCTION.md.
+project_id = "lina"
+
+[functions.lina-ai]
+# lina-ai checks every session itself (index.ts asks Supabase Auth who the token belongs to), which also works
+# with Supabase's newer JWT signing keys. The gateway's own check is off so it doesn't refuse those tokens.
+verify_jwt = false
+
+[auth]
+site_url = "https://lina.app"
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+# Lina signs people in with a six-digit code typed into the app.
+otp_length = 6
+otp_expiry = 900
+max_frequency = "30s"
+
+[auth.email.template.magic_link]
+subject = "Your Lina code"
+content_path = "./supabase/templates/magic_link.html"

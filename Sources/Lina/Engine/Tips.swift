@@ -15,8 +15,8 @@ final class TipCoach {
 
         var text: String {
             switch self {
-            case .slash: "Type /lina and a small bar opens here. Ask anything, press Return, and the bar goes away."
-            case .listening: "I'm listening. End with . , ? or Return."
+            case .slash: "Type /lina and what you want, right here. I tint it so it reads as mine; Return runs it, esc takes it back."
+            case .listening: "I'm listening. Press Return when you're done."
             case .sentence: "When you pause after a sentence, I check it. Fixes appear above the words: ⌘1, ⌘2… or ⌘A for all."
             case .inserted: "Done. ⌘Z undoes it, and Lina › Saved keeps a copy."
             }

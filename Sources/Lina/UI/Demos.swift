@@ -24,9 +24,14 @@ enum DemoStep {
     /// Types text into the scene, character by character.
     case type(String)
     case pause(Double)
-    /// Opens the command bar and types this into it.
-    case bar(String)
-    case hideBar
+    /// Types `/lina ` and then this into the text, marked as a command.
+    case command(String)
+    /// The command runs (Return) or waits for a choice.
+    case commandState(CommandMark.State)
+    /// The command takes itself out of the text.
+    case removeCommand
+    /// The command is replaced by this, as an inserted answer does.
+    case commandBecomes(String)
     /// Puts fix chips over these words.
     case chips([DemoFix])
     case hideChips
@@ -34,8 +39,6 @@ enum DemoStep {
     case select(Int)
     /// Swaps part of the scene's text, as choosing an option does.
     case replace(String, with: String)
-    /// Adds text at the end at once, as an inserted answer does.
-    case append(String)
     case hideCard
     /// Drops a picture into the scene's text.
     case picture
@@ -67,53 +70,58 @@ extension UseCase {
                     steps: [.type(typo), .pause(1.2), .chips(typoFixes), .pause(2.8),
                             .replace(typo, with: "Thank you for your help, I really appreciate it."), .hideChips, .pause(2.2)]),
             UseCase(id: "search", title: "Ask the web mid-sentence", who: "Students, writers, anyone fact-checking",
-                    pitch: "Type /lina where the fact belongs. A small bar opens; ask your question and press Return. The answer comes back worded to fit your sentence, and the bar is gone.",
+                    pitch: "Type /lina and your question right where the fact belongs, in any field, even an empty search box. Lina marks it as hers; Return asks the web. ⌘1 swaps the question for an answer worded to fit your sentence.",
                     tryIt: "The 2022 World Cup final ended /lina who won and how ↩",
-                    steps: [.type("The 2022 World Cup final ended "), .pause(0.4), .bar("who won and how"), .pause(0.6), .hideBar,
-                            .card(.working("Searching the web…"), selected: 0), .pause(1.0),
+                    steps: [.type("The 2022 World Cup final ended "), .pause(0.4), .command("who won and how"), .pause(0.6),
+                            .commandState(.running), .card(.working("Searching the web…"), selected: 0), .pause(1.0),
+                            .commandState(.waiting),
                             .card(.answer(question: "who won and how", text: answer,
                                           sources: [WebSource(title: "fifa.com", url: "https://www.fifa.com"),
                                                     WebSource(title: "bbc.com", url: "https://www.bbc.com")],
                                           grounded: true), selected: 0),
-                            .pause(2.4), .select(0), .pause(0.4), .append(answer + "."), .hideCard, .pause(2.4)]),
+                            .pause(2.4), .select(0), .pause(0.4), .commandBecomes(answer + "."), .hideCard, .pause(2.4)]),
             UseCase(id: "question", title: "A question that makes you think", who: "Journaling, essays, hard decisions",
-                    pitch: "After a thought, type /lina and press Return with nothing else. She asks one sharp question about it, and leaves the answering to you.",
+                    pitch: "After a thought, type /lina and press Return. The command takes itself out, and she asks one sharp question about what you wrote, leaving the answering to you.",
                     tryIt: "I think I want to quit my job and open a bakery. /lina ↩",
-                    steps: [.type("I think I want to quit my job and open a bakery. "), .pause(0.4), .bar(""), .pause(0.7), .hideBar,
+                    steps: [.type("I think I want to quit my job and open a bakery. "), .pause(0.4), .command(""), .pause(0.7),
+                            .commandState(.running), .pause(0.5), .removeCommand,
                             .card(.question("What would you miss most about the job you have now?"), selected: 0),
                             .pause(3.2), .hideCard, .type("Honestly, the people."), .pause(2.0)]),
             UseCase(id: "rewrite", title: "Say it better, in the tone you need", who: "Email, Slack, cover letters",
-                    pitch: "After a rough draft, type /lina rewrite and a tone. Pick one of three versions with ⌘1, ⌘2 or ⌘3; your draft is replaced.",
+                    pitch: "After a rough draft, type /lina rewrite and a tone, then Return. Pick one of three versions with ⌘1, ⌘2 or ⌘3: your draft is replaced and the command disappears.",
                     tryIt: "hey can u send the report asap /lina rewrite polite ↩",
-                    steps: [.type("hey can u send the report asap"), .pause(0.4), .bar("rewrite polite"), .pause(0.5), .hideBar,
+                    steps: [.type("hey can u send the report asap "), .pause(0.4), .command("rewrite polite"), .pause(0.5),
+                            .commandState(.running), .card(.working("Writing three versions…"), selected: 0), .pause(0.9),
+                            .commandState(.waiting),
                             .card(.choices(title: "Rewrites · polite", original: "hey can u send the report asap", options: [
                                 "Hi, could you send me the report as soon as you can?",
                                 "Hi Sam, could you send the report when you get a chance today?",
                                 "Would you mind sending over the report today? Thanks!",
                             ]), selected: 0),
-                            .pause(1.6), .select(1), .pause(1.2),
-                            .replace("hey can u send the report asap", with: "Hi Sam, could you send the report when you get a chance today?"),
+                            .pause(1.6), .select(1), .pause(1.2), .removeCommand,
+                            .replace("hey can u send the report asap ", with: "Hi Sam, could you send the report when you get a chance today?"),
                             .hideCard, .pause(2.2)]),
             UseCase(id: "models", title: "Switch models without leaving the page", who: "Power users",
-                    pitch: "Type /lina model to see what Token Factory offers, writing and image models alike, and switch with one key.",
+                    pitch: "Type /lina model and Return to see what Token Factory offers, writing and image models alike, and switch with one key.",
                     tryIt: "/lina model ↩",
-                    steps: [.pause(0.4), .bar("model"), .pause(0.5), .hideBar,
+                    steps: [.pause(0.4), .command("model"), .pause(0.5), .commandState(.running), .pause(0.4), .removeCommand,
                             .card(.models(items: models, currentText: models[1].id, currentImage: models[3].id), selected: 1),
                             .pause(1.0), .select(0), .pause(1.2),
                             .card(.notice("Now writing with nemotron-3-super-120b-a12b.", .happy), selected: 0),
                             .pause(1.8), .hideCard, .pause(1.0)]),
             UseCase(id: "image", title: "A picture for your post", who: "Newsletters, social posts, slides",
-                    pitch: "Describe it after /lina image. FLUX on Token Factory draws it, and ⌘1 drops it where your cursor is.",
+                    pitch: "Describe it after /lina image and press Return. FLUX on Token Factory draws it, and ⌘1 puts it where the command was.",
                     tryIt: "/lina image a cozy reading nook at dusk, watercolor ↩",
-                    steps: [.type("Our autumn reading list"), .pause(0.4), .bar("image a cozy reading nook at dusk, watercolor"), .pause(0.5), .hideBar,
-                            .card(.working("Drawing with flux-schnell…"), selected: 0), .pause(1.0),
+                    steps: [.type("Our autumn reading list "), .pause(0.4), .command("image a cozy reading nook at dusk, watercolor"), .pause(0.5),
+                            .commandState(.running), .card(.working("Drawing with flux-schnell…"), selected: 0), .pause(1.0),
+                            .commandState(.waiting),
                             .card(.image(prompt: "a cozy reading nook at dusk, watercolor", image: DemoArt.readingNook()), selected: 0),
-                            .pause(2.4), .select(0), .pause(0.4), .picture, .hideCard, .pause(2.4)]),
+                            .pause(2.4), .select(0), .pause(0.4), .removeCommand, .picture, .hideCard, .pause(2.4)]),
         ]
     }
 }
 
-/// Plays a use case on a loop: a little text field, and Lina's bar, chips and cards around it.
+/// Plays a use case on a loop: a little text field, a /lina command marked inside it, and Lina's chips and cards.
 struct DemoPlayer: View {
     let useCase: UseCase
     var appName = "Notes"
@@ -122,7 +130,8 @@ struct DemoPlayer: View {
     @State private var text = ""
     @State private var card: CardContent?
     @State private var selected = 0
-    @State private var barText: String?
+    @State private var command: String?
+    @State private var commandState: CommandMark.State = .typing
     @State private var chips: [DemoFix] = []
     @State private var shownPicture: NSImage?
 
@@ -141,10 +150,9 @@ struct DemoPlayer: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 if chips.isEmpty {
-                    (Text(text) + Text(barText == nil ? "|" : "").foregroundStyle(Theme.ink))
-                        .font(.system(size: compact ? 13 : 14))
+                    InlineCommandLine(text: text, command: command, state: commandState, cursor: card == nil || command != nil,
+                                      size: compact ? 13 : 14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     chipped
                 }
@@ -158,12 +166,7 @@ struct DemoPlayer: View {
 
             ZStack(alignment: .topLeading) {
                 Color.clear
-                if let barText {
-                    CommandBarLook(showing: barText)
-                        .scaleEffect(compact ? 0.74 : 0.8, anchor: .topLeading)
-                        .padding(.leading, -6)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                } else if let card {
+                if let card {
                     CardView(content: card, selected: selected)
                         .scaleEffect(compact ? 0.82 : 0.9, anchor: .topLeading)
                         .padding(.leading, -6)
@@ -206,7 +209,7 @@ struct DemoPlayer: View {
     @MainActor
     private func loop() async {
         while !Task.isCancelled {
-            text = ""; card = nil; selected = 0; barText = nil; chips = []; shownPicture = nil
+            text = ""; card = nil; selected = 0; command = nil; commandState = .typing; chips = []; shownPicture = nil
             for step in useCase.steps {
                 if Task.isCancelled { return }
                 switch step {
@@ -218,16 +221,21 @@ struct DemoPlayer: View {
                     }
                 case let .pause(seconds):
                     try? await Task.sleep(for: .milliseconds(Int(seconds * 1000)))
-                case let .bar(s):
-                    withAnimation(Theme.spring) { card = nil; barText = "" }
-                    try? await Task.sleep(for: .milliseconds(300))
-                    for ch in s {
-                        barText?.append(ch)
+                case let .command(s):
+                    card = nil
+                    commandState = .typing
+                    command = ""
+                    for ch in "/lina " + s {
+                        command?.append(ch)
                         try? await Task.sleep(for: .milliseconds(Int.random(in: 35...70)))
                         if Task.isCancelled { return }
                     }
-                case .hideBar:
-                    withAnimation(Theme.quick) { barText = nil }
+                case let .commandState(state):
+                    withAnimation(Theme.quick) { commandState = state }
+                case .removeCommand:
+                    withAnimation(Theme.quick) { command = nil }
+                case let .commandBecomes(s):
+                    withAnimation(Theme.quick) { command = nil; text += s }
                 case let .chips(fixes):
                     withAnimation(Theme.spring) { chips = fixes }
                 case .hideChips:
@@ -239,8 +247,6 @@ struct DemoPlayer: View {
                     withAnimation(Theme.quick) { selected = i }
                 case let .replace(old, new):
                     withAnimation(Theme.quick) { text = text.replacingOccurrences(of: old, with: new) }
-                case let .append(s):
-                    withAnimation(Theme.quick) { text += s }
                 case .hideCard:
                     withAnimation(Theme.quick) { card = nil }
                 case .picture:

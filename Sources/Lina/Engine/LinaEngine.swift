@@ -3,10 +3,12 @@ import Carbon.HIToolbox
 import Combine
 
 /// Lina's brain. She stays quiet until the writer asks:
-/// - typing `/lina` (or ⌥ Space) opens a command bar at the caret; the command never enters the text;
+/// - `/lina …` typed right in the text is marked as Lina's (a tinted, underlined band). Return, or a pause after
+///   `,` `.` `?`, runs it; the command then disappears, or the answer takes its place;
 /// - after a sentence ends with `.` `?` or `!` and the writer stops typing for a moment, she checks it and puts
 ///   small fixes right on top of the mistakes.
 /// Nothing goes into the text until the writer presses ⌘ + a number (or ⌘A for every fix).
+/// Fields Lina can't read still work: she follows the keystrokes and pastes at the caret.
 @MainActor
 final class LinaEngine: ObservableObject {
     enum Status: Equatable {
@@ -37,11 +39,11 @@ final class LinaEngine: ObservableObject {
     private let cards = CardPanel()
     private let fixPanel = FixPanel()
     private let marks = MarkPanel()
-    private let bar = CommandBar()
+    private let commandMark = CommandMark()
     private let monitor = KeyMonitor()
 
     private var bag = Set<AnyCancellable>()
-    private var pendingCommand: DispatchWorkItem?
+    private var inlineRun: DispatchWorkItem?
     private var pendingSentence: DispatchWorkItem?
     private var sentenceWaiting = false
     private var relayout: DispatchWorkItem?
@@ -53,10 +55,10 @@ final class LinaEngine: ObservableObject {
     private var typed = ""
     private var action: CardAction = .none
     private var fixState: FixState?
-    /// The field and app the command bar was opened over.
-    private var barSnap: FocusSnapshot?
-    private var barApp: NSRunningApplication?
-    private var barAnchor: CGRect = .zero
+    /// The `/lina …` command being typed or run in the writer's text.
+    private var inline: Inline?
+    /// A command still sitting in the text while its card waits; taken out if the writer dismisses the card.
+    private var commandLeft: Writer.Spot?
     private var celebrating = false
     private var errorUntil = Date.distantPast
     private var noticeTimer: DispatchWorkItem?
@@ -65,7 +67,7 @@ final class LinaEngine: ObservableObject {
     private enum CardAction {
         case none
         case replace(Writer.Spot, options: [String], history: UUID?)
-        case answer(Writer.Spot, fit: String, withSource: String?, history: UUID?)
+        case answer(Writer.Spot, fit: String, withSource: String?, suffix: String, history: UUID?)
         case models([ModelItem])
         case image(Writer.Spot, png: Data, history: UUID?)
 
@@ -73,7 +75,7 @@ final class LinaEngine: ObservableObject {
             switch self {
             case .none: 0
             case let .replace(_, options, _): options.count
-            case let .answer(_, _, withSource, _): withSource == nil ? 1 : 2
+            case let .answer(_, _, withSource, _, _): withSource == nil ? 1 : 2
             case let .models(items): min(9, items.count)
             case .image: 2
             }
@@ -92,17 +94,37 @@ final class LinaEngine: ObservableObject {
         var anchor: CGRect
     }
 
-    /// Where a command came from and where its result goes.
+    /// A `/lina …` command typed in the writer's own text.
+    private struct Inline {
+        let pid: pid_t
+        /// The command as typed so far, starting with "/lina".
+        var text: String
+        /// What the writer typed before it, for fields Lina can't read.
+        let before: String
+        var running = false
+        /// The writer typed or clicked after it ran, so taking characters back by keystroke would hit the wrong ones.
+        var dirty = false
+        var anchor: CGRect?
+    }
+
+    /// Where a command sits and where its result goes.
     private struct CommandContext {
-        /// The field as it was when the command was given (without the command).
-        let snap: FocusSnapshot
-        /// Where the command sits: the caret for the bar, the command's start for an in-text command.
+        /// The field as it was when the command ran; nil when the field can't be read.
+        let snap: FocusSnapshot?
+        /// Where the command starts in the field.
         let start: Int
-        /// What an answer or a picture replaces: an empty range at the caret for the bar.
-        let replace: NSRange
-        /// An in-text command's own text, taken out when the command only talks to Lina.
-        let remove: NSRange?
+        /// What an answer replaces: the command without a trailing `,` `.` `!`.
+        let answer: Writer.Spot
+        /// The whole command: what a picture replaces.
+        let whole: Writer.Spot
+        /// The command and the space before it: taken out when the command only talks to Lina.
+        let remove: Writer.Spot
+        /// Punctuation to put back after an answer when the field can't be read.
+        let suffix: String
+        let before: String
+        let after: String
         let anchor: CGRect
+        let app: String
     }
 
     private static let digits: [Int: Int] = [
@@ -123,24 +145,22 @@ final class LinaEngine: ObservableObject {
         }
         fixPanel.onChoose = { [weak self] n in self?.applyFix(n) }
         fixPanel.onAll = { [weak self] in self?.applyAllFixes() }
-        bar.onSubmit = { [weak self] text in self?.barSubmitted(text) }
-        bar.onCancel = { [weak self] in self?.barCancelled() }
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
             .sink { [weak self] note in
                 let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     if let app, app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
-                        let switched = app.processIdentifier != self.barApp?.processIdentifier
                         self.currentApp = (app.localizedName ?? "", app.bundleIdentifier ?? "")
                         self.typed = ""
-                        if switched { self.dismiss() }
+                        self.inline?.dirty = true
+                        self.dismiss()
                     }
                     self.refreshStatus()
                 }
             }
             .store(in: &bag)
-        settings.objectWillChange
+        settings.objectWillChange.merge(with: Account.shared.objectWillChange)
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.refreshStatus() }
             .store(in: &bag)
@@ -213,9 +233,6 @@ final class LinaEngine: ObservableObject {
     }
 
     private func handleKey(_ event: CGEvent) -> Bool {
-        // The command bar has focus: its keys are its own.
-        if bar.isVisible { return false }
-
         let flags = event.flags
         let code = event.keyCode
         let cmd = flags.contains(.maskCommand)
@@ -242,16 +259,58 @@ final class LinaEngine: ObservableObject {
         if Self.linaIsInFront { return false }
         guard settings.enabled, !settings.disabledApps.contains(currentApp.bundleID) else { return false }
 
+        // A /lina command being typed: Return runs it (and never reaches the app, so a search box won't submit),
+        // esc takes it back out.
+        if var command = inline, !command.running {
+            switch code {
+            case kVK_Return, kVK_ANSI_KeypadEnter:
+                runInline()
+                return true
+            case kVK_Escape:
+                cancelInline()
+                return true
+            case kVK_Delete:
+                command.text.removeLast()
+                if command.text.lowercased().hasPrefix(CommandParser.trigger) {
+                    inline = command
+                    inlineRun?.cancel()
+                    markSoon()
+                } else {
+                    endInline()
+                }
+                if !typed.isEmpty { typed.removeLast() }
+                return false
+            case kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow, kVK_Tab:
+                endInline()
+                return false
+            default:
+                let s = event.typedString
+                guard let ch = s.last, !s.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+                    return false
+                }
+                command.text += s
+                inline = command
+                typed += s
+                markSoon()
+                inlineRun?.cancel()
+                // Moving on with , . ? ! and a pause runs it, as the writer would end a thought.
+                if ",.?!".contains(ch) {
+                    let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.runInline() } }
+                    inlineRun = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: work)
+                }
+                return false
+            }
+        }
+        if inline?.running == true { inline?.dirty = true }
+
         if code == kVK_Delete {
             if !typed.isEmpty { typed.removeLast() }
             if sentenceWaiting { scheduleSentenceCheck() }
-            noticeListening()
             return false
         }
         if code == kVK_Return || code == kVK_ANSI_KeypadEnter {
             typed += "\n"
-            noticeListening()
-            if !settings.commandBar { scheduleCommandCheck(after: 150) }
             if sentenceWaiting { scheduleSentenceCheck() }
             return false
         }
@@ -260,34 +319,28 @@ final class LinaEngine: ObservableObject {
             return false
         }
 
-        // "/lina": swallow the "a", take back "/lin", and open the bar where the writer is.
-        if settings.commandBar, s.lowercased() == "a", startsCommand(typed) {
-            typed = ""
-            openBar(takingBack: 4)
-            return true
-        }
-
         let wasEmptyOrSpace = typed.last.map { $0.isWhitespace } ?? true
+        let startsInline = s.lowercased() == "a" && startsCommand(typed) && inline == nil
+        let before = String(typed.dropLast(4))
         typed += s
-        if typed.count > 120 { typed.removeFirst(typed.count - 120) }
+        if typed.count > 600 { typed.removeFirst(typed.count - 600) }
         if cards.model.content?.isNotice == true { hideCard() }
         if fixState != nil { scheduleRelayout() }
 
+        if startsInline {
+            beginInline("/lina", before: before)
+            return false
+        }
         if s == "/", wasEmptyOrSpace, !tips.hasSeen(.slash) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                 MainActor.assumeIsolated { self?.tips.show(.slash, under: AX.snapshot()?.caretRect) }
             }
         }
-        noticeListening()
 
         switch ch {
         case ".", "?", "!":
             sentenceWaiting = true
             scheduleSentenceCheck()
-            if !settings.commandBar { scheduleCommandCheck(after: 650) }
-        case ",":
-            if !settings.commandBar { scheduleCommandCheck(after: 900) }
-            if sentenceWaiting { scheduleSentenceCheck() }
         default:
             if sentenceWaiting { scheduleSentenceCheck() }
         }
@@ -302,34 +355,16 @@ final class LinaEngine: ObservableObject {
         return before == nil || before!.isWhitespace || "([\"'“‘".contains(before!)
     }
 
-    /// With the bar off, Lina's face perks up while "/lina …" is being typed in the text.
-    private func noticeListening() {
-        guard !settings.commandBar else { return }
-        let line = typed.split(separator: "\n", omittingEmptySubsequences: false).last.map(String.init) ?? ""
-        let listening = line.lowercased().contains(CommandParser.trigger)
-        if listening, status == .ready {
-            set(.listening)
-        } else if !listening, status == .listening {
-            set(.ready)
-        }
-    }
-
     private func mouseDown() {
         typed = ""
-        if status == .listening && !bar.isVisible { set(.ready) }
         tips.hide()
         let p = NSEvent.mouseLocation
         // Clicking a fix or an option is a choice, not a dismissal.
-        if (cards.isVisible && cards.frame.contains(p)) || (fixPanel.isVisible && fixPanel.frame.contains(p))
-            || (bar.isVisible && bar.frame.contains(p)) { return }
+        if (cards.isVisible && cards.frame.contains(p)) || (fixPanel.isVisible && fixPanel.frame.contains(p)) { return }
+        if let command = inline {
+            if command.running { inline?.dirty = true } else { endInline() }
+        }
         if cards.isVisible || fixState != nil { dismiss() }
-    }
-
-    private func scheduleCommandCheck(after ms: Int) {
-        pendingCommand?.cancel()
-        let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.checkTypedCommand() } }
-        pendingCommand = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(ms), execute: work)
     }
 
     /// Waits until the writer has stopped typing for the delay in Settings, then checks what they finished.
@@ -359,92 +394,180 @@ final class LinaEngine: ObservableObject {
         return true
     }
 
-    // MARK: Command bar
+    // MARK: Inline commands
 
-    /// The ⌥ Space shortcut opens the same bar as typing /lina.
+    /// The ⌥ Space shortcut types "/lina " for the writer and starts a command right there.
     func askNow() {
-        guard settings.enabled else { refreshStatus(); return }
-        guard !bar.isVisible else { return }
-        openBar(takingBack: 0)
+        guard settings.enabled, !Self.linaIsInFront, inline == nil else { refreshStatus(); return }
+        guard let app = NSWorkspace.shared.frontmostApplication else { return }
+        let before = typed
+        TextInserter.type("/lina ")
+        typed += "/lina "
+        inline = Inline(pid: app.processIdentifier, text: "/lina ", before: before)
+        set(.listening)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            MainActor.assumeIsolated { self?.markInline() }
+        }
     }
 
-    private func openBar(takingBack count: Int) {
+    private func beginInline(_ text: String, before: String) {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return }
         tips.hide()
         hideCard()
         closeFixes()
-        if count > 0 { TextInserter.backspace(count) }
-        barApp = NSWorkspace.shared.frontmostApplication
-        // Give the app a moment to take the characters back before reading where the caret is.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let snap = AX.snapshot(requireCaret: false)
-                self.barSnap = snap
-                if let snap {
-                    self.barAnchor = snap.caretRect ?? self.anchor(snap, at: max(0, snap.selection.location - 1))
-                } else {
-                    let m = NSEvent.mouseLocation
-                    self.barAnchor = CGRect(x: m.x, y: m.y - 10, width: 1, height: 18)
-                }
-                self.set(.listening)
-                self.bar.show(at: self.barAnchor)
+        inline = Inline(pid: app.processIdentifier, text: text, before: before)
+        set(.listening)
+        markSoon()
+        if !tips.hasSeen(.listening) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                MainActor.assumeIsolated { self?.tips.show(.listening, under: AX.snapshot()?.caretRect) }
             }
         }
     }
 
-    private func barSubmitted(_ text: String) {
-        let app = barApp
-        app?.activate()
-        set(.ready)
-        guard let snap = barSnap else {
-            notice("I can't read this field, so I can't work here. Try Notes, Mail or a browser.", .worried, at: barAnchor)
-            return
-        }
-        let caret = snap.selection
-        let ctx = CommandContext(snap: snap, start: caret.location, replace: caret, remove: nil, anchor: barAnchor)
-        let kind = CommandParser.parseBar(text)
-        // Let the writer's app take focus back before anything reads or writes it.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-            MainActor.assumeIsolated { self?.run(kind, ctx) }
+    /// Redraws the mark after the app has taken the keystroke.
+    private func markSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+            MainActor.assumeIsolated { self?.markInline() }
         }
     }
 
-    private func barCancelled() {
-        barApp?.activate()
-        set(.ready)
-        refreshStatus()
+    private func markInline() {
+        guard let command = inline else { commandMark.hide(); return }
+        let waiting = cards.isVisible && cards.model.content?.isPersistent == true
+        let state: CommandMark.State = command.running ? (waiting ? .waiting : .running) : .typing
+        guard let snap = AX.snapshot(requireCaret: false), snap.pid == command.pid else {
+            commandMark.show(band: nil, caret: command.anchor, state: state)
+            return
+        }
+        var band: CGRect?
+        if let range = commandRange(command, in: snap) {
+            band = AX.screenRect(of: range, in: snap.element)
+        }
+        var caret = snap.caretRect
+        if band == nil, caret == nil, let frame = AX.frame(of: snap.element) {
+            // Some search boxes won't say where their text is: put the tag inside the field's right end.
+            caret = CGRect(x: max(frame.minX + 8, frame.maxX - 130), y: frame.midY - 9, width: 1, height: 18)
+        }
+        inline?.anchor = band ?? caret ?? command.anchor
+        commandMark.show(band: band, caret: caret, state: state)
+    }
+
+    /// Where the command is in the field: right before the caret, or the last "/lina" before it.
+    private func commandRange(_ command: Inline, in snap: FocusSnapshot) -> NSRange? {
+        let text = snap.text
+        let caret = min(snap.selection.location, text.length)
+        let len = (command.text as NSString).length
+        if caret >= len {
+            let r = NSRange(location: caret - len, length: len)
+            if text.substring(with: r).lowercased() == command.text.lowercased() { return r }
+        }
+        let window = NSRange(location: max(0, caret - 600), length: min(caret, 600))
+        let found = text.range(of: CommandParser.trigger, options: [.backwards, .caseInsensitive], range: window)
+        guard found.location != NSNotFound else { return nil }
+        return NSRange(location: found.location, length: caret - found.location)
+    }
+
+    /// Stops treating the text as a command; the writer's text stays as it is.
+    private func endInline() {
+        inlineRun?.cancel()
+        inline = nil
+        commandMark.hide()
+        if status == .listening { set(.ready) }
+    }
+
+    /// Esc while typing a command: it comes back out of the text.
+    private func cancelInline() {
+        guard let command = inline else { return }
+        let spot = removalSpot(command)
+        endInline()
+        Writer.replace(spot, with: "")
+    }
+
+    /// The command and the space before it, in the field if it can be read, otherwise by keystrokes.
+    private func removalSpot(_ command: Inline) -> Writer.Spot {
+        if let snap = AX.snapshot(requireCaret: false), snap.pid == command.pid, var r = commandRange(command, in: snap) {
+            if r.location > 0, snap.text.character(at: r.location - 1) == 0x20 {
+                r = NSRange(location: r.location - 1, length: r.length + 1)
+            }
+            return Writer.spot(r, in: snap)
+        }
+        let len = (command.text as NSString).length + (command.before.hasSuffix(" ") ? 1 : 0)
+        var spot = Writer.typed(len, pid: command.pid)
+        if command.dirty { spot.backspaces = nil }
+        return spot
+    }
+
+    /// Return, or a pause after , . ? !: run the command where it was typed.
+    private func runInline() {
+        guard var command = inline, !command.running else { return }
+        inlineRun?.cancel()
+        command.running = true
+        inline = command
+        let kind = CommandParser.parseBar(command.text)
+        let len = (command.text as NSString).length
+        let last = command.text.last
+        let keepsMark = last.map { ",.!".contains($0) } ?? false
+        let suffix = keepsMark ? String(last!) : ""
+        let fallbackAnchor = command.anchor ?? CGRect(x: NSEvent.mouseLocation.x, y: NSEvent.mouseLocation.y - 20, width: 1, height: 18)
+
+        let ctx: CommandContext
+        if let snap = AX.snapshot(requireCaret: false), snap.pid == command.pid, let range = commandRange(command, in: snap) {
+            var remove = range
+            if remove.location > 0, snap.text.character(at: remove.location - 1) == 0x20 {
+                remove = NSRange(location: remove.location - 1, length: remove.length + 1)
+            }
+            let body = keepsMark ? NSRange(location: range.location, length: range.length - 1) : range
+            let text = snap.text
+            let beforeStart = max(0, range.location - 600)
+            let para = text.paragraphRange(for: NSRange(location: min(NSMaxRange(body), text.length), length: 0))
+            let afterEnd = max(NSMaxRange(body), min(text.length, NSMaxRange(para)))
+            let anchor = AX.screenRect(of: range, in: snap.element) ?? snap.caretRect ?? command.anchor
+                ?? self.anchor(snap, at: range.location)
+            ctx = CommandContext(snap: snap, start: range.location,
+                                 answer: Writer.spot(body, in: snap), whole: Writer.spot(range, in: snap),
+                                 remove: Writer.spot(remove, in: snap), suffix: "",
+                                 before: text.substring(with: NSRange(location: beforeStart, length: range.location - beforeStart)),
+                                 after: text.substring(with: NSRange(location: NSMaxRange(body), length: afterEnd - NSMaxRange(body))),
+                                 anchor: anchor, app: snap.appName)
+        } else {
+            // The field can't be read: follow the keystrokes. The command is the last `len` characters typed.
+            let pid = command.pid
+            let spaceBefore = command.before.hasSuffix(" ") ? 1 : 0
+            ctx = CommandContext(snap: nil, start: 0,
+                                 answer: Writer.typed(len, pid: pid, before: command.before),
+                                 whole: Writer.typed(len, pid: pid, before: command.before),
+                                 remove: Writer.typed(len + spaceBefore, pid: pid),
+                                 suffix: suffix, before: String(command.before.suffix(600)), after: "",
+                                 anchor: fallbackAnchor, app: currentApp.name)
+        }
+        markInline()
+        run(kind, ctx)
+    }
+
+    /// The command is done with: forget it and take down its mark.
+    private func finishInline() {
+        inlineRun?.cancel()
+        inline = nil
+        commandLeft = nil
+        commandMark.hide()
+    }
+
+    /// The writer dismissed a command's card: take the command back out of the text.
+    private func removeLeftCommand() {
+        guard var spot = commandLeft else { return }
+        if inline?.dirty == true, spot.range.location == NSNotFound { spot.backspaces = nil }
+        commandLeft = nil
+        Writer.replace(spot, with: "")
     }
 
     // MARK: What to do
-
-    /// With the command bar off: a `/lina …` typed into the text and finished with a terminator.
-    private func checkTypedCommand() {
-        guard settings.enabled, isTrusted, !Self.linaIsInFront,
-              let snap = AX.snapshot(requireCaret: false),
-              !settings.disabledApps.contains(snap.bundleID), snap.selection.length == 0,
-              let command = CommandParser.command(in: snap.text, caret: snap.selection.location)
-        else { return }
-        guard remember("\(snap.pid)|\(command.range.location)|\(command.text)") else { return }
-        typed = ""
-        var remove = command.range
-        if remove.location > 0, snap.text.character(at: remove.location - 1) == 0x20 {
-            remove = NSRange(location: remove.location - 1, length: remove.length + 1)
-        }
-        let isImage: Bool = switch command.kind {
-        case .image: true
-        default: false
-        }
-        let ctx = CommandContext(snap: snap, start: command.range.location,
-                                 replace: isImage ? command.range : command.bodyRange, remove: remove,
-                                 anchor: anchor(snap, at: max(0, command.range.location)))
-        run(command.kind, ctx)
-    }
 
     /// After the writer stops typing: check the sentences they finished since the last check.
     private func checkSentences() {
         sentenceWaiting = false
         guard settings.enabled, settings.checkSentences, settings.isModelConfigured, isTrusted, !Self.linaIsInFront,
-              fixState == nil, !(cards.model.content?.isPersistent ?? false), !bar.isVisible,
+              fixState == nil, !(cards.model.content?.isPersistent ?? false), inline == nil,
               let snap = AX.snapshot(requireCaret: false),
               !settings.disabledApps.contains(snap.bundleID), snap.selection.length == 0
         else { return }
@@ -460,7 +583,6 @@ final class LinaEngine: ObservableObject {
 
     private func run(_ kind: LinaCommand.Kind, _ ctx: CommandContext) {
         tips.hide()
-        let snap = ctx.snap
         let anchor = ctx.anchor
         let needsModel: Bool = switch kind {
         case .help, .saved: false
@@ -468,84 +590,86 @@ final class LinaEngine: ObservableObject {
         default: true
         }
         if needsModel && !settings.isModelConfigured {
-            notice("Lina isn't connected to a model yet. Add a key in Settings → Models.", .worried, at: anchor)
+            Writer.replace(ctx.remove, with: "")
+            finishInline()
+            notice("Lina isn't connected yet. Sign in, or add a key in Settings.", .worried, at: anchor)
             return
         }
-        let text = snap.text
+        let snap = ctx.snap
 
         switch kind {
         case .help:
-            removeCommand(ctx)
+            Writer.replace(ctx.remove, with: "")
+            finishInline()
             show(.help, at: anchor)
             set(.waiting)
         case .saved:
-            removeCommand(ctx)
+            Writer.replace(ctx.remove, with: "")
+            finishInline()
             onOpenSaved?()
         case let .model(filter):
-            removeCommand(ctx)
+            Writer.replace(ctx.remove, with: "")
+            finishInline()
             showModels(filter: filter, anchor: anchor)
         case .ask:
-            let about = text.substring(to: ctx.start).trimmingCharacters(in: .whitespacesAndNewlines)
-            removeCommand(ctx)
+            let about = (snap.map { $0.text.substring(to: ctx.start) } ?? ctx.before)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            Writer.replace(ctx.remove, with: "")
+            finishInline()
             guard WordCount.count(about) >= 3 else {
                 notice("Write a few sentences first, then ask me.", .idle, at: anchor)
                 return
             }
-            question(about: String(about.suffix(4000)), app: snap.appName, anchor: anchor)
+            question(about: String(about.suffix(4000)), app: ctx.app, anchor: anchor)
         case .fix:
-            removeCommand(ctx)
-            guard let target = CommandParser.target(before: ctx.start, in: text) else {
-                notice("There's nothing above to check yet.", .idle, at: anchor)
+            Writer.replace(ctx.remove, with: "")
+            finishInline()
+            guard let snap, let target = CommandParser.target(before: ctx.start, in: snap.text) else {
+                notice(snap == nil ? "I can't read this field, so I can't check it. Questions and search still work here."
+                                   : "There's nothing above to check yet.", .idle, at: anchor)
                 return
             }
             proofread(passage: target, snap: snap, quiet: false)
-        case let .rewrite(how):
-            guard let target = CommandParser.target(before: ctx.start, in: text) else {
-                notice("Write the paragraph first, then /lina rewrite.", .idle, at: anchor)
+        case .rewrite, .edit:
+            guard let snap, let target = CommandParser.target(before: ctx.start, in: snap.text) else {
+                Writer.replace(ctx.remove, with: "")
+                finishInline()
+                notice(ctx.snap == nil ? "I can't read this field, so I can't rewrite it here. Questions and search still work."
+                                       : "Write the paragraph first, then ask me to rewrite it.", .idle, at: anchor)
                 return
             }
-            let passage = text.substring(with: target)
-            choices(title: how.isEmpty ? "Rewrites" : "Rewrites · \(how)", passage: passage,
-                    messages: Prompts.rewrite(passage, how: how, voice: settings.voice, aboutMe: settings.aboutMe),
-                    spot: Writer.spot(spanning(target, ctx), in: snap), kind: .rewrite, app: snap.appName,
-                    prompt: "rewrite \(how)", anchor: anchor)
-        case let .edit(instruction):
-            guard let target = CommandParser.target(before: ctx.start, in: text) else {
-                notice("Write the paragraph first, then /lina edit.", .idle, at: anchor)
-                return
+            let passage = snap.text.substring(with: target)
+            let whole = NSRange(location: target.location, length: NSMaxRange(ctx.whole.range) - target.location)
+            commandLeft = ctx.remove
+            if case let .rewrite(how) = kind {
+                choices(title: how.isEmpty ? "Rewrites" : "Rewrites · \(how)", passage: passage,
+                        messages: Prompts.rewrite(passage, how: how, voice: settings.voice, aboutMe: settings.aboutMe),
+                        spot: Writer.spot(whole, in: snap), kind: .rewrite, app: ctx.app, prompt: "rewrite \(how)", anchor: anchor)
+            } else if case let .edit(instruction) = kind {
+                choices(title: "Edit · \(instruction)", passage: passage,
+                        messages: Prompts.edit(passage, instruction: instruction, voice: settings.voice, aboutMe: settings.aboutMe),
+                        spot: Writer.spot(whole, in: snap), kind: .edit, app: ctx.app, prompt: instruction, anchor: anchor)
             }
-            let passage = text.substring(with: target)
-            choices(title: "Edit · \(instruction)", passage: passage,
-                    messages: Prompts.edit(passage, instruction: instruction, voice: settings.voice, aboutMe: settings.aboutMe),
-                    spot: Writer.spot(spanning(target, ctx), in: snap), kind: .edit, app: snap.appName,
-                    prompt: instruction, anchor: anchor)
         case let .image(prompt):
             guard !prompt.isEmpty else {
-                removeCommand(ctx)
+                Writer.replace(ctx.remove, with: "")
+                finishInline()
                 notice("Tell me what to draw: /lina image a red bicycle in the snow.", .idle, at: anchor)
                 return
             }
-            guard settings.hasNebiusKey else {
-                notice("Pictures come from Token Factory. Add a Nebius key in Settings → Models.", .worried, at: anchor)
+            guard settings.canMakePictures else {
+                Writer.replace(ctx.remove, with: "")
+                finishInline()
+                notice("Pictures need a Lina account or a Nebius key.", .worried, at: anchor)
                 return
             }
-            image(prompt: prompt, spot: Writer.spot(ctx.replace, in: snap), app: snap.appName, anchor: anchor)
+            commandLeft = ctx.remove
+            image(prompt: prompt, spot: ctx.whole, app: ctx.app, anchor: anchor)
         case let .search(question):
-            let start = max(0, ctx.start - 600)
-            let before = text.substring(with: NSRange(location: start, length: ctx.start - start))
-            let afterStart = NSMaxRange(ctx.replace)
-            let para = text.paragraphRange(for: NSRange(location: min(afterStart, text.length), length: 0))
-            let afterEnd = max(afterStart, min(text.length, NSMaxRange(para)))
-            let after = text.substring(with: NSRange(location: afterStart, length: afterEnd - afterStart))
-            search(question, before: before, after: after, spot: Writer.spot(ctx.replace, in: snap),
-                   app: snap.appName, anchor: anchor)
+            commandLeft = ctx.remove
+            search(question, before: ctx.before, after: ctx.after, spot: ctx.answer, suffix: ctx.suffix,
+                   app: ctx.app, anchor: anchor)
         }
-    }
-
-    /// The paragraph plus, for an in-text command, the command after it: the whole thing a rewrite replaces.
-    private func spanning(_ target: NSRange, _ ctx: CommandContext) -> NSRange {
-        guard let remove = ctx.remove else { return target }
-        return NSRange(location: target.location, length: NSMaxRange(remove) - target.location)
     }
 
     // MARK: Jobs
@@ -567,9 +691,23 @@ final class LinaEngine: ObservableObject {
         guard gen == generation else { return }
         if error is CancellationError { return }
         if let e = error as? URLError, e.code == .cancelled { return }
+        removeLeftCommand()
+        finishInline()
         errorUntil = Date().addingTimeInterval(10)
-        if !quiet { notice(error.localizedDescription, .worried, at: anchor, seconds: 6) }
-        set(.error(error.localizedDescription))
+        var message = error.localizedDescription
+        if settings.isSignedIn && Self.isSignedOut(error) {
+            // Usually a session that ran out while the Mac slept: renew it and let the writer try again.
+            Account.shared.refreshSoon(force: true)
+            message = "Lina is signing you back in. Try again in a moment."
+        }
+        if !quiet { notice(message, .worried, at: anchor, seconds: 6) }
+        set(.error(message))
+    }
+
+    private static func isSignedOut(_ error: Error) -> Bool {
+        if case .http(401, _)? = error as? LLMError { return true }
+        if case .http(401, _)? = error as? GeminiError { return true }
+        return false
     }
 
     private func proofread(passage: NSRange, snap: FocusSnapshot, quiet: Bool) {
@@ -641,7 +779,8 @@ final class LinaEngine: ObservableObject {
         }
     }
 
-    private func search(_ question: String, before: String, after: String, spot: Writer.Spot, app: String, anchor: CGRect) {
+    private func search(_ question: String, before: String, after: String, spot: Writer.Spot, suffix: String,
+                        app: String, anchor: CGRect) {
         let grounded = settings.hasSearch
         let gemini = settings.gemini
         let client = LLMClient(endpoint: settings.commandEndpoint)
@@ -651,12 +790,14 @@ final class LinaEngine: ObservableObject {
             do {
                 let raw: String
                 var sources: [WebSource] = []
+                var suggestions = ""
                 if grounded {
                     let answer = try await gemini.ask(
                         system: Prompts.searchSystem(voice: voice, aboutMe: aboutMe, grounded: true),
                         prompt: Prompts.searchUser(question: question, before: before, after: after))
                     raw = answer.text
                     sources = answer.sources
+                    suggestions = answer.suggestionsHTML
                 } else {
                     raw = try await client.complete(Prompts.search(question: question, before: before, after: after,
                                                                   voice: voice, aboutMe: aboutMe),
@@ -667,8 +808,9 @@ final class LinaEngine: ObservableObject {
                 guard !fit.isEmpty else { throw LLMError.message("No answer came back. Try asking another way.") }
                 let id = self.history.add(HistoryItem(kind: .search, app: app, prompt: question, result: answer, sources: sources))
                 let withSource = sources.first.map { "\(fit) (\($0.site))" }
-                self.action = .answer(spot, fit: fit, withSource: withSource, history: id)
-                self.show(.answer(question: question, text: fit, sources: sources, grounded: grounded), at: anchor)
+                self.action = .answer(spot, fit: fit, withSource: withSource, suffix: suffix, history: id)
+                self.show(.answer(question: question, text: fit, sources: sources, grounded: grounded,
+                                  suggestions: suggestions), at: anchor)
                 self.set(.waiting)
             } catch {
                 self?.fail(error, gen: gen, anchor: anchor, quiet: false)
@@ -804,9 +946,9 @@ final class LinaEngine: ObservableObject {
             history.update(id, result: text)
             if ok { history.markInserted(id) }
             finish(ok)
-        case let .answer(spot, fit, withSource, id):
+        case let .answer(spot, fit, withSource, suffix, id):
             let text = n == 2 ? (withSource ?? fit) : fit
-            let ok = Writer.replace(spot) { before, after in Answers.fit(text, before: before, after: after) }
+            let ok = Writer.replace(spot) { before, after in Answers.fit(text, before: before, after: after) + suffix }
             if ok { history.markInserted(id) }
             finish(ok)
         case let .models(items):
@@ -821,6 +963,8 @@ final class LinaEngine: ObservableObject {
         case let .image(spot, png, id):
             if n == 2 {
                 TextInserter.copyImage(png)
+                removeLeftCommand()
+                finishInline()
                 hideCard()
                 celebrate()
                 return
@@ -833,6 +977,9 @@ final class LinaEngine: ObservableObject {
 
     private func finish(_ ok: Bool) {
         let anchor = fixState?.anchor ?? CGRect(x: cards.frame.minX + 30, y: cards.frame.maxY - 16, width: 1, height: 16)
+        // A successful choice replaced the command along with everything else; a failed one leaves it to be taken out.
+        if ok { commandLeft = nil } else { removeLeftCommand() }
+        finishInline()
         hideCard()
         closeFixes()
         if ok {
@@ -851,6 +998,7 @@ final class LinaEngine: ObservableObject {
         noticeTimer?.cancel()
         tips.hide()
         cards.show(content, at: anchor, selected: selected)
+        if inline != nil { markInline() }
     }
 
     private func notice(_ message: String, _ mood: Mood, at anchor: CGRect, seconds: Double = 3.5) {
@@ -878,16 +1026,12 @@ final class LinaEngine: ObservableObject {
     func dismiss() {
         task?.cancel()
         generation += 1
+        removeLeftCommand()
+        finishInline()
         hideCard()
         closeFixes()
         tips.hide()
         refreshStatus()
-    }
-
-    /// Takes an in-text command out of the text (with the space before it). Bar commands were never in the text.
-    private func removeCommand(_ ctx: CommandContext) {
-        guard let remove = ctx.remove else { return }
-        Writer.replace(Writer.spot(remove, in: ctx.snap), with: "")
     }
 
     /// Where to put a card: under the line holding `index`, or wherever the app lets us look.

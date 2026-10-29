@@ -4,6 +4,7 @@ import Combine
 struct OnboardingView: View {
     @ObservedObject var engine: LinaEngine
     @ObservedObject var settings = AppSettings.shared
+    @ObservedObject var account = Account.shared
     @State var step = 0
     @State private var trusted = AX.isTrusted
     @State private var demo = 0
@@ -83,7 +84,7 @@ struct OnboardingView: View {
             VStack(spacing: 10) {
                 Text("Hi, I'm Lina.")
                     .font(Theme.serif(34, weight: .semibold))
-                Text("I sit at your cursor in every app, and I only speak when you ask. Type /lina and a small bar opens right there: ask for a fact, a question, a rewrite or a picture. When you pause after a sentence, I put fixes above any mistakes.")
+                Text("I sit at your cursor in every app, and I only speak when you ask. Type /lina right in your text and ask for a fact, a question, a rewrite or a picture; I mark the command as mine and Return runs it. When you pause after a sentence, I put fixes above any mistakes.")
                     .font(.system(size: 14.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -119,7 +120,25 @@ struct OnboardingView: View {
         }
     }
 
-    private var keys: some View {
+    @ViewBuilder private var keys: some View {
+        if Account.shared.isConfigured {
+            signIn
+        } else {
+            developerKeys
+        }
+    }
+
+    /// Release builds: an email and a code. The keys stay on Lina's server.
+    private var signIn: some View {
+        StepLayout(mood: account.isSignedIn ? .happy : .idle, title: "Make your Lina account",
+                   message: "Type your email and I'll send you a six-digit code. No password, and no API keys: my server holds those.") {
+            SignInForm()
+                .frame(width: 440)
+        }
+    }
+
+    /// Development builds without a server: bring your own keys.
+    private var developerKeys: some View {
         StepLayout(mood: settings.isModelConfigured ? .happy : .idle, title: "Give me a mind, and the web",
                    message: "Nemotron on Nebius Token Factory checks your sentences and answers commands. Gemini lets me search the live web when you ask a question.") {
             VStack(spacing: 14) {

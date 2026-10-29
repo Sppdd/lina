@@ -92,13 +92,13 @@ struct MenuBarView: View {
         let app = engine.currentApp.name
         switch engine.status {
         case .ready: return app.isEmpty ? "Ready when you are" : "Ready in \(app)"
-        case .listening: return settings.commandBar ? "Listening… type in the bar, then Return" : "Listening… end with . , ? or Return"
+        case .listening: return "Listening… press Return to run it"
         case let .working(label): return label
         case .waiting: return "Waiting for your ⌘ choice"
         case .off: return "Off"
         case .paused: return "Paused in \(app)"
         case .needsPermission: return "Needs Accessibility access"
-        case .needsModel: return "Needs an API key"
+        case .needsModel: return Account.shared.isConfigured ? "Sign in to start" : "Needs an API key"
         case let .error(message): return message
         }
     }
@@ -122,8 +122,10 @@ struct MenuBarView: View {
                     action: ("Grant Access", { AX.grantAccess() }))
         case .needsModel:
             Callout(symbol: "key.fill", tint: Theme.ink,
-                    title: "Connect a model",
-                    message: "Add a Nebius API key (and a Gemini key for web search), or use a model on this Mac.",
+                    title: Account.shared.isConfigured ? "Sign in to Lina" : "Connect a model",
+                    message: Account.shared.isConfigured
+                        ? "Sign in with your email in Settings → Account. No API keys needed."
+                        : "Add a Nebius API key (and a Gemini key for web search), or use a model on this Mac.",
                     action: ("Open Settings", { closeMenu(); WindowOpener.shared.settings() }))
         case let .error(message):
             Callout(symbol: "exclamationmark.triangle.fill", tint: Mood.worried.hair,

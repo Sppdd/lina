@@ -5,6 +5,7 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
+            AccountSettings().tabItem { Label("Account", systemImage: "person.crop.circle") }
             GeneralSettings(engine: engine).tabItem { Label("General", systemImage: "gearshape") }
             ModelSettings().tabItem { Label("Models", systemImage: "cpu") }
             SearchSettings().tabItem { Label("Search", systemImage: "globe") }
@@ -27,7 +28,6 @@ private struct GeneralSettings: View {
         Form {
             Section {
                 Toggle("Lina is on", isOn: $settings.enabled)
-                Toggle("Open a command bar when I type /lina", isOn: $settings.commandBar)
                 Toggle("Check each sentence I finish", isOn: $settings.checkSentences)
                 LabeledContent("Show fixes after I stop typing for") {
                     HStack {
@@ -45,15 +45,16 @@ private struct GeneralSettings: View {
             } header: {
                 Text("Lina")
             } footer: {
-                Text("Lina reads only when you type /lina or stop typing after a sentence. Fixes appear right above your mistakes; nothing goes into your text until you press ⌘1, ⌘2… or ⌘A for all of them.")
+                Text("Lina reads only when you type /lina or stop typing after a sentence. A /lina command stays in your text, tinted and underlined, and Return runs it. Fixes appear right above your mistakes; nothing goes into your text until you press ⌘1, ⌘2… or ⌘A for all of them.")
                     .foregroundStyle(.secondary)
             }
 
             Section("Shortcuts") {
-                Picker("Open the command bar", selection: $settings.hotKey) {
+                Picker("Start a /lina command", selection: $settings.hotKey) {
                     ForEach(LinaHotKey.allCases) { Text($0.title).tag($0) }
                 }
                 .onChange(of: settings.hotKey) { _, k in HotKeyCenter.shared.register(k) }
+                LabeledContent("Run a /lina command") { KeyCap("↩", size: 12) }
                 LabeledContent("Take one fix or option") { HStack(spacing: 4) { KeyCap("⌘1", size: 12); KeyCap("⌘2", size: 12); KeyCap("⌘3", size: 12) } }
                 LabeledContent("Take every fix") { KeyCap("⌘A", size: 12) }
                 LabeledContent("Dismiss a card") { KeyCap("esc", size: 12) }
@@ -86,6 +87,7 @@ private struct GeneralSettings: View {
 
 struct ModelSettings: View {
     @ObservedObject var settings = AppSettings.shared
+    @ObservedObject var account = Account.shared
     @State private var models: [ModelItem] = []
     @State private var testState: TestState = .idle
     @State private var keyDraft = ""
@@ -100,7 +102,17 @@ struct ModelSettings: View {
                 Text(settings.provider.subtitle).font(.callout).foregroundStyle(.secondary)
             }
 
-            if settings.provider == .nebius {
+            if settings.provider == .nebius && settings.isSignedIn {
+                Section {
+                    modelPicker("Commands", kind: .text, selection: $settings.commandModel)
+                    modelPicker("Sentence checks", kind: .text, selection: $settings.checkModel)
+                } header: {
+                    Text("Nebius Token Factory, through your Lina account")
+                } footer: {
+                    Text("You're signed in, so no API key is needed. Lina's server only runs the models it allows.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else if settings.provider == .nebius {
                 Section {
                     SecureField("API key", text: $keyDraft, prompt: Text("Paste your Nebius API key"))
                         .onSubmit(saveKey)
@@ -135,7 +147,7 @@ struct ModelSettings: View {
             } header: {
                 Text("Images")
             } footer: {
-                Text("Used by /lina image. FLUX models on Token Factory; needs the Nebius key above.")
+                Text("Used by /lina image. FLUX models on Token Factory; needs your Lina account or a Nebius key.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -216,15 +228,26 @@ struct ModelSettings: View {
 
 private struct SearchSettings: View {
     @ObservedObject var settings = AppSettings.shared
+    @ObservedObject var account = Account.shared
     @State private var keyDraft = ""
     @State private var testState: TestState = .idle
 
     var body: some View {
         Form {
+            if settings.isSignedIn {
+                Section {
+                    Text("You're signed in: searches go through Lina's server, which picks the Gemini model and counts them toward today's limit.")
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Your Lina account")
+                }
+            }
             Section {
                 SecureField("Gemini API key", text: $keyDraft, prompt: Text("Paste your Gemini API key"))
                     .onSubmit(saveKey)
+                    .disabled(settings.isSignedIn)
                 TextField("Model", text: $settings.geminiModel)
+                    .disabled(settings.isSignedIn)
                 HStack {
                     Button(action: test) {
                         if testState == .testing { ProgressView().controlSize(.small) } else { Text("Test Search") }
@@ -239,10 +262,10 @@ private struct SearchSettings: View {
                     }
                 }
             } header: {
-                Text("Google Search via Gemini")
+                Text(settings.isSignedIn ? "Developer key (not used while signed in)" : "Google Search via Gemini")
             } footer: {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Anything after /lina that isn't a command is a question. Lina searches Google through Gemini's grounding, then words the answer to fit your sentence. You can also put GEMINI_API_KEY in the .env file next to Lina.")
+                    Text("Anything after /lina that isn't a command is a question. Lina searches Google through Gemini's grounding, then words the answer to fit your sentence, with Google's search suggestions under it. You can also put GEMINI_API_KEY in the .env file next to Lina.")
                     Link("Get a Gemini API key →", destination: URL(string: "https://aistudio.google.com/apikey")!)
                 }
                 .font(.caption)
@@ -392,6 +415,7 @@ private struct AppsSettings: View {
 
 private struct PrivacySettings: View {
     @ObservedObject var settings = AppSettings.shared
+    @ObservedObject var account = Account.shared
     @ObservedObject var history = History.shared
     @State private var confirmClear = false
 
@@ -405,19 +429,19 @@ private struct PrivacySettings: View {
             }
             Section("What gets sent, and where") {
                 PrivacyRow(symbol: "checkmark.seal", title: "Sentence checks",
-                           detail: "The sentence you finished and up to 600 characters before it, to \(settings.provider == .nebius ? "Nebius Token Factory" : "your local server at \(settings.localBaseURL)").")
+                           detail: "The sentence you finished and up to 600 characters before it, to \(settings.provider == .local ? "your local server at \(settings.localBaseURL)" : settings.isSignedIn ? "Lina's server, which passes it to Nebius Token Factory and keeps only a count" : "Nebius Token Factory").")
                 PrivacyRow(symbol: "text.bubble", title: "/lina, fix, rewrite and edit",
                            detail: "The paragraph the command works on (for /lina, up to 4,000 characters before it), to the same place.")
                 PrivacyRow(symbol: "globe", title: "Questions",
                            detail: settings.hasSearch
-                               ? "Your question and the words around it (about 700 characters) go to Google Gemini, which searches the web."
+                               ? "Your question and the words around it (about 700 characters) go to Google Gemini, which searches the web. Google keeps search prompts for about 30 days."
                                : "Your question and the words around it go to your model. Add a Gemini key to search the web.")
                 PrivacyRow(symbol: "photo", title: "Pictures",
                            detail: "Only the description you typed, to Nebius Token Factory.")
             }
             Section {
                 PrivacyRow(symbol: "tray.full", title: "Saved stays here",
-                           detail: "Searches, questions, rewrites and pictures are saved in a file on this Mac. No account, no analytics.")
+                           detail: "Searches, questions, rewrites and pictures are saved in a file on this Mac, never on Lina's server. No analytics.")
                 Button("Show Saved Files in Finder") { NSWorkspace.shared.open(history.folder) }
                 Button("Delete Everything Saved…", role: .destructive) { confirmClear = true }
                     .disabled(history.items.isEmpty)

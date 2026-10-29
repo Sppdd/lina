@@ -64,8 +64,6 @@ final class AppSettings: ObservableObject {
     @Published var showTips: Bool { didSet { d.set(showTips, forKey: "showTips") } }
     /// How long the writer has to stop typing after a sentence before Lina shows its fixes, in seconds.
     @Published var checkDelay: Double { didSet { d.set(checkDelay, forKey: "checkDelay") } }
-    /// Typing /lina opens a small command bar at the caret instead of leaving the command in the text.
-    @Published var commandBar: Bool { didSet { d.set(commandBar, forKey: "commandBar") } }
     @Published var provider: Provider { didSet { d.set(provider.rawValue, forKey: "provider") } }
     @Published var commandModel: String { didSet { d.set(commandModel, forKey: "commandModel") } }
     @Published var checkModel: String { didSet { d.set(checkModel, forKey: "checkModel") } }
@@ -86,7 +84,6 @@ final class AppSettings: ObservableObject {
             "checkSentences": true,
             "showTips": true,
             "checkDelay": 1.2,
-            "commandBar": true,
             "provider": Provider.nebius.rawValue,
             "voice": VoicePreset.journal.rawValue,
             "linaHotKey": LinaHotKey.optionSpace.rawValue,
@@ -96,7 +93,6 @@ final class AppSettings: ObservableObject {
         checkSentences = d.bool(forKey: "checkSentences")
         showTips = d.bool(forKey: "showTips")
         checkDelay = d.double(forKey: "checkDelay")
-        commandBar = d.bool(forKey: "commandBar")
         provider = Provider(rawValue: d.string(forKey: "provider") ?? "") ?? .nebius
         // Earlier versions called these the companion and ghost-text models.
         commandModel = d.string(forKey: "commandModel") ?? d.string(forKey: "companionModel") ?? Provider.defaultCommandModel
@@ -104,7 +100,9 @@ final class AppSettings: ObservableObject {
         imageModel = d.string(forKey: "imageModel") ?? ModelCatalog.defaultImageModel
         localBaseURL = d.string(forKey: "localBaseURL") ?? Provider.local.defaultBaseURL
         localModel = d.string(forKey: "localModel") ?? Provider.defaultLocalModel
-        geminiModel = d.string(forKey: "geminiModel") ?? GeminiClient.defaultModel
+        // Earlier versions defaulted to Gemini 2.5 Flash; move them to the current default.
+        let savedGemini = d.string(forKey: "geminiModel") ?? ""
+        geminiModel = savedGemini.isEmpty || savedGemini == "gemini-2.5-flash" ? GeminiClient.defaultModel : savedGemini
         voice = VoicePreset(rawValue: d.string(forKey: "voice") ?? "") ?? .journal
         aboutMe = d.string(forKey: "aboutMe") ?? ""
         hotKey = LinaHotKey(rawValue: d.string(forKey: "linaHotKey") ?? "") ?? .optionSpace
@@ -127,35 +125,45 @@ final class AppSettings: ObservableObject {
             ?? ""
     }
 
+    /// Signed in, everything goes through Lina's server and no provider key is needed on this Mac.
+    /// Signed out, developer keys (`.env` or Settings) are used directly.
+    private var cloud: Account? { Account.shared.isSignedIn ? Account.shared : nil }
+    var isSignedIn: Bool { cloud != nil }
+
+    private func nebius(_ model: String, task: String) -> LLMEndpoint {
+        cloud?.endpoint(model: model, task: task)
+            ?? LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: model)
+    }
+
+    private var local: LLMEndpoint { LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel) }
+
     /// The model that answers /lina commands.
     var commandEndpoint: LLMEndpoint {
-        switch provider {
-        case .nebius: LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: commandModel)
-        case .local: LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel)
-        }
+        provider == .local ? local : nebius(commandModel, task: "command")
     }
 
     /// The fast model that checks finished sentences.
     var checkEndpoint: LLMEndpoint {
-        switch provider {
-        case .nebius: LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: checkModel)
-        case .local: LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel)
-        }
+        provider == .local ? local : nebius(checkModel, task: "check")
     }
 
     /// Images and the model list always come from Token Factory.
-    var nebiusEndpoint: LLMEndpoint {
-        LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: commandModel)
+    var nebiusEndpoint: LLMEndpoint { nebius(commandModel, task: "image") }
+
+    var gemini: GeminiClient {
+        if let cloud { return GeminiClient(apiKey: cloud.accessToken, model: geminiModel, gateway: cloud.gateway) }
+        return GeminiClient(apiKey: geminiKey, model: geminiModel)
     }
 
-    var gemini: GeminiClient { GeminiClient(apiKey: geminiKey, model: geminiModel) }
-
     var isModelConfigured: Bool {
-        provider == .local || hasNebiusKey
+        provider == .local || hasNebiusKey || isSignedIn
     }
 
     var hasNebiusKey: Bool { !apiKey.trimmingCharacters(in: .whitespaces).isEmpty }
-    var hasSearch: Bool { !geminiKey.trimmingCharacters(in: .whitespaces).isEmpty }
+    var hasGeminiKey: Bool { !geminiKey.trimmingCharacters(in: .whitespaces).isEmpty }
+    var hasSearch: Bool { hasGeminiKey || isSignedIn }
+    /// `/lina image` needs Token Factory, whichever provider writes.
+    var canMakePictures: Bool { hasNebiusKey || isSignedIn }
 
     /// The model `/lina model` changes, for the current provider.
     var activeTextModel: String {

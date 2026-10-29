@@ -89,12 +89,16 @@ enum AX {
         AXUIElementIsAttributeSettable(focused, kAXValueAttribute as CFString, &settable)
         guard textRoles.contains(role) || settable.boolValue else { return nil }
 
-        guard let value: String = copy(focused, kAXValueAttribute) else { return nil }
-        guard let rangeValue: AXValue = copy(focused, kAXSelectedTextRangeAttribute) else { return nil }
-        var cf = CFRange()
-        guard AXValueGetValue(rangeValue, .cfRange, &cf) else { return nil }
-
+        // Empty fields (a fresh search box) often report no value at all, and some fields don't report a
+        // selection: treat them as empty, with the caret at the end, rather than as unreadable.
+        let value: String = copy(focused, kAXValueAttribute) ?? ""
         let ns = value as NSString
+        var cf = CFRange(location: ns.length, length: 0)
+        if let rangeValue: AXValue = copy(focused, kAXSelectedTextRangeAttribute) {
+            var reported = CFRange()
+            if AXValueGetValue(rangeValue, .cfRange, &reported) { cf = reported }
+        }
+
         let sel = NSRange(location: max(0, min(cf.location, ns.length)), length: max(0, cf.length))
         let caret = caretRect(focused, at: sel.location, textLength: ns.length)
         if requireCaret && caret == nil { return nil }

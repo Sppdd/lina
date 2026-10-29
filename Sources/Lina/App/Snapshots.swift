@@ -52,8 +52,13 @@ enum Snapshots {
                 render(CardView(content: content), size: nil, dark: dark, to: dir.appendingPathComponent("\(name)\(suffix).png"))
             }
             render(TipView(text: TipCoach.Tip.slash.text), size: nil, dark: dark, to: dir.appendingPathComponent("tip\(suffix).png"))
-            render(CommandBarLook(showing: "who won the 2022 World Cup final"), size: nil, dark: dark,
-                   to: dir.appendingPathComponent("command-bar\(suffix).png"))
+            render(VStack(alignment: .leading, spacing: 10) {
+                ForEach([CommandMark.State.typing, .running, .waiting], id: \.self) { state in
+                    InlineCommandLine(text: "The 2022 World Cup final ended ", command: "/lina who won and how",
+                                      state: state, cursor: false)
+                }
+            }.frame(width: 460, alignment: .leading).padding(14).background(Color(nsColor: .textBackgroundColor)),
+                   size: nil, dark: dark, to: dir.appendingPathComponent("inline-command\(suffix).png"))
             render(HStack(spacing: 6) {
                 ForEach(Array(fixes.enumerated()), id: \.offset) { i, f in FixChip(text: f.right, key: "⌘\(i + 1)", kind: f.kind) }
                 FixChip(text: "Fix all", key: "⌘A", kind: nil)

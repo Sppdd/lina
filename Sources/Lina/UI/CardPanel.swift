@@ -10,8 +10,9 @@ enum CardContent: Equatable {
     /// Word fixes, listed. Used when the app can't say where the words are on screen;
     /// otherwise the fixes sit right on top of the mistakes (`FixPanel`).
     case corrections([Fix])
-    /// A search answer that can replace the question in the sentence.
-    case answer(question: String, text: String, sources: [WebSource], grounded: Bool)
+    /// A search answer that can replace the question in the sentence. `suggestions` is Google's Search
+    /// Suggestions HTML, which Google requires to be shown with a grounded answer.
+    case answer(question: String, text: String, sources: [WebSource], grounded: Bool, suggestions: String = "")
     /// Rewrites or an edit to choose from.
     case choices(title: String, original: String, options: [String])
     /// `/lina model`: models on Token Factory (or the local server).
@@ -50,7 +51,7 @@ enum CardContent: Equatable {
         case .question: "Lina asks"
         case let .corrections(fixes):
             fixes.count == 1 ? "1 mistake" : "\(fixes.count) mistakes"
-        case let .answer(_, _, _, grounded): grounded ? "From the web" : "From the model"
+        case let .answer(_, _, _, grounded, _): grounded ? "From the web" : "From the model"
         case let .choices(title, _, _): title
         case .models: "Models"
         case .image: "Your picture"
@@ -126,7 +127,7 @@ struct CardView: View {
                     .buttonStyle(.plain)
                 }
             }
-        case let .answer(question, text, sources, grounded):
+        case let .answer(question, text, sources, grounded, suggestions):
             VStack(alignment: .leading, spacing: 8) {
                 Text(question)
                     .font(.system(size: 11.5))
@@ -149,8 +150,12 @@ struct CardView: View {
                         }
                     }
                 }
+                if !suggestions.isEmpty {
+                    SearchSuggestionsView(html: suggestions)
+                        .frame(height: 46)
+                }
                 if !grounded {
-                    Text("Not checked against the web. Add a Gemini key in Settings → Search for live answers.")
+                    Text("Not checked against the web. Sign in, or add a Gemini key in Settings → Search, for live answers.")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -188,7 +193,7 @@ struct CardView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Text("Anything else you type in the bar is a web search, answered to fit your sentence.")
+                Text("Anything else after /lina is a web search, answered to fit your sentence.")
                     .font(.system(size: 11.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -203,7 +208,7 @@ struct CardView: View {
         case .question: return [("esc", "Got it")]
         case let .corrections(fixes):
             return fixes.count > 1 ? [("⌘1–⌘\(min(9, fixes.count))", "Fix one"), ("⌘A", "Fix all"), ("esc", "Keep mine")] : [("⌘1", "Fix"), ("esc", "Keep mine")]
-        case let .answer(_, _, sources, _):
+        case let .answer(_, _, sources, _, _):
             return sources.isEmpty ? [("⌘1", "Insert"), ("esc", "Dismiss")] : [("⌘1", "Insert"), ("⌘2", "With source"), ("esc", "Dismiss")]
         case let .choices(_, _, options): return [("⌘1–⌘\(max(1, options.count))", "Use"), ("esc", "Keep mine")]
         case .models: return [("↑↓", "Move"), ("↩", "Use"), ("⌘1–⌘9", "Pick"), ("esc", "Close")]

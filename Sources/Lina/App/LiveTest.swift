@@ -3,7 +3,8 @@ import Carbon.HIToolbox
 
 /// `Lina --livetest [--local MODEL]` drives a real TextEdit window end to end:
 /// types a sentence with mistakes, waits for Lina's fixes, presses ⌘A and checks they landed.
-/// Then it types `/lina`, asks for help in the command bar, and checks nothing was left in the text.
+/// Then it types `/lina help` inline, presses Return, and checks the command took itself out of the text.
+/// With web search set up, it also asks a question in an empty document and inserts the answer with ⌘1.
 @MainActor
 enum LiveTest {
     static func runIfRequested(engine: LinaEngine) {
@@ -72,20 +73,51 @@ enum LiveTest {
         guard fixed.contains("really"), !fixed.contains("realy") else { say("⌘A did not apply the fixes: “\(fixed)”"); return false }
         say("Fixed ✓ “\(fixed)”")
 
-        say("Typing /lina, then help in the bar…")
-        await typeAsUser("\n/lina")
-        try? await Task.sleep(for: .seconds(0.6))
-        await typeAsUser("help\n")
+        say("Typing /lina help in the text, then Return…")
+        await typeAsUser("\n/lina help")
+        try? await Task.sleep(for: .seconds(0.4))
+        let typed = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
+        guard typed.hasSuffix("/lina help") else { say("The command didn't stay in the text while typing: “\(typed)”"); return false }
+        guard engine.status == .listening else { say("Lina wasn't listening to the command (status: \(engine.status))"); return false }
+        await typeAsUser("\n")
         let t1 = Date()
         while Date().timeIntervalSince(t1) < 5 {
             if engine.card == .help { break }
             try? await Task.sleep(for: .milliseconds(100))
         }
         guard engine.card == .help else { say("No help card"); return false }
+        try? await Task.sleep(for: .seconds(0.5))
         let after = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
-        guard !after.contains("/lin") else { say("The command was left in the text: “\(after)”"); return false }
-        say("Help card shown, and the text has no command in it ✓")
+        guard !after.contains("/lin"), !after.hasSuffix("\n\n") else { say("The command was left in the text: “\(after)”"); return false }
+        say("Help card shown, and the command took itself out ✓")
         postKey(CGKeyCode(kVK_Escape), flags: [])
+
+        guard AppSettings.shared.hasSearch else {
+            say("No web search set up; skipping the question test")
+            return true
+        }
+        // The case from the field: a question typed into an empty field must get an answer, not "can't read".
+        closeDocument()
+        guard await freshDocument() else { say("TextEdit not ready for the question test"); return false }
+        say("Asking a question in an empty document…")
+        await typeAsUser("/lina what is the capital of France")
+        try? await Task.sleep(for: .seconds(0.3))
+        await typeAsUser("\n")
+        let t2 = Date()
+        var answered = false
+        while Date().timeIntervalSince(t2) < 30 {
+            if case .answer? = engine.card { answered = true; break }
+            if case let .error(m) = engine.status { say("Search error: \(m)"); return false }
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        guard answered else { say("No answer within 30 s (status: \(engine.status))"); return false }
+        postKey(CGKeyCode(kVK_ANSI_1), flags: .maskCommand)
+        try? await Task.sleep(for: .seconds(1.2))
+        let answer = (AX.snapshot(requireCaret: false)?.text as String?) ?? ""
+        guard answer.lowercased().contains("paris"), !answer.contains("/lina") else {
+            say("⌘1 didn't put the answer in place of the question: “\(answer)”"); return false
+        }
+        say("Answer inserted ✓ “\(answer)”")
         return true
     }
 

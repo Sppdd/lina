@@ -96,7 +96,7 @@ private struct MeetLinaPage: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Meet Lina.")
                         .font(Theme.serif(38, weight: .semibold))
-                    Text("She lives at your cursor in every app, and speaks only when you ask. Type /lina anywhere and a small bar opens: ask, press Return, and her answer waits for your ⌘1.")
+                    Text("She lives at your cursor in every app, and speaks only when you ask. Type /lina and what you want, right in your text, in any field. She tints it as hers; press Return, and her answer waits for your ⌘1.")
                         .font(.system(size: 15))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -156,7 +156,7 @@ private struct MeetLinaPage: View {
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .foregroundStyle(Theme.ink)
                             .frame(width: 230, alignment: .leading)
-                        Text("Opens the same bar, without typing /lina.").font(.system(size: 13)).foregroundStyle(.secondary)
+                        Text("Types /lina for you, ready for what you want.").font(.system(size: 13)).foregroundStyle(.secondary)
                     }
                 }
                 .padding(16)
@@ -190,7 +190,7 @@ private struct UseCasesPage: View {
         VStack(alignment: .leading, spacing: 26) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("What she's good at").font(Theme.serif(30, weight: .semibold))
-                Text("Six moments where Lina earns her place. Each one plays on a loop; try the line under it in any app (↩ means press Return in the bar).")
+                Text("Six moments where Lina earns her place. Each one plays on a loop; try the line under it in any app (↩ means press Return).")
                     .font(.system(size: 14)).foregroundStyle(.secondary)
             }
             ForEach(UseCase.all) { useCase in
@@ -457,7 +457,7 @@ enum TryIt {
 
             1. Finish this sentence with a dot and watch for a card: Thank you for you're help, I realy apreciate it
 
-            2. Ask the web mid-sentence. Type the start, then /lina, then your question in the bar and Return: The tallest mountain in Africa is /lina which mountain and how tall
+            2. Ask the web mid-sentence. Type the start, then /lina and your question, then Return: The tallest mountain in Africa is /lina which mountain and how tall
 
             3. Ask for a question about your thinking. After a thought, type /lina and press Return: I keep putting off this decision because
 
