@@ -3,6 +3,10 @@
 This is the plan behind the second version of Lina, written from the owner's notes on the first one.
 Each section says what was asked, what Lina does now, and where the gaps were filled.
 
+> **Update:** corrections now sit as small chips right above each mistake (⌘1, ⌘2… one, ⌘A all), after a pause
+> you set in Settings; and `/lina` opens a command bar at the cursor instead of living in your text.
+> Production plans are in [PRODUCTION.md](PRODUCTION.md).
+
 ## The idea in one line
 
 Lina is a character who lives at your cursor in every app and **speaks only when you ask**.

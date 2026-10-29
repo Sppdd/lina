@@ -29,9 +29,9 @@
 
 Most AI writing tools interrupt you. Lina waits.
 
-Type `/lina` in **any app** (Notes, Mail, Slack, a browser) and finish with a comma or a dot. A small card appears under your line with what you asked for: a fact from the web worded to fit your sentence, a question that makes you think, three rewrites, a fixed sentence, or a picture. **Nothing goes into your text until you press ⌘1, ⌘2 or ⌘3.** Esc leaves your words exactly as they were.
+Type `/lina` in **any app** (Notes, Mail, Slack, a browser) and a small bar opens right at your cursor. Ask a question or give a command there, press Return, and the bar disappears. Your command never lands in your text, so there's nothing to delete. The answer waits in a card under your line: a fact from the web worded to fit your sentence, a question that makes you think, three rewrites, or a picture. **Nothing goes into your text until you press ⌘1, ⌘2 or ⌘3.** Esc leaves your words exactly as they were.
 
-When you end a sentence with a dot, Lina quietly checks it for typos and grammar. If she finds something, she underlines it and offers a fix. If not, you never notice her.
+When you pause after finishing a sentence, Lina quietly checks it. If something's wrong, a small chip with the right word appears **right above each mistake**: ⌘1, ⌘2… fixes one, ⌘A fixes them all. If nothing's wrong, you never notice her. You choose how long she waits after you stop typing.
 
 <p align="center"><img src="docs/lina-moods.png" width="760" alt="Lina's seven moods: ready, listening, thinking, found something, done, needs you, paused"></p>
 
@@ -41,18 +41,18 @@ Under the hood: **NVIDIA Nemotron on Nebius Token Factory** for checks and comma
 
 ## What Lina does
 
-| Type this | Lina does this |
+| Do this | Lina does this |
 |---|---|
-| A sentence ending in `.` `?` `!` | Checks it. Mistakes are underlined; ⌘1 fixes them, ⌘2 fixes and smooths. |
-| `The final ended /lina who won and how,` | Searches the web. ⌘1 replaces the question with an answer that fits: *"…ended with Argentina beating France on penalties,"*. ⌘2 adds the source. |
-| `/lina.` | One short question about what you just wrote. |
-| `/lina fix.` | Checks the whole paragraph. |
-| `/lina rewrite polite.` | Three rewrites of the paragraph in that tone; pick with ⌘1–⌘3. |
-| `/lina edit make it shorter.` | The paragraph, changed the way you asked. |
-| `/lina model` | Every writing and image model on Token Factory; switch with ⌘1–⌘9. |
-| `/lina image a reading nook at dusk, watercolor.` | A picture; ⌘1 drops it into your text. |
-| `/lina saved` · `/lina help` | Opens Saved · lists the commands. |
-| `⌥ Space` | Same as `/lina`, without typing it. |
+| Finish a sentence and pause | Checks it. The right word appears above each mistake; ⌘1, ⌘2… fixes one, ⌘A fixes all. |
+| `The final ended /lina` → *who won and how* ↩ | Searches the web. ⌘1 puts an answer that fits at your cursor: *"…ended with Argentina beating France on penalties"*. ⌘2 adds the source. |
+| `/lina` ↩ (nothing else) | One short question about what you just wrote. |
+| `/lina` → *fix* ↩ | Checks the whole paragraph. |
+| `/lina` → *rewrite polite* ↩ | Three rewrites of the paragraph in that tone; pick with ⌘1–⌘3. |
+| `/lina` → *edit make it shorter* ↩ | The paragraph, changed the way you asked. |
+| `/lina` → *model* ↩ | Every writing and image model on Token Factory; switch with ⌘1–⌘9. |
+| `/lina` → *image a reading nook at dusk* ↩ | A picture; ⌘1 drops it at your cursor. |
+| `/lina` → *saved* / *help* ↩ | Opens Saved / lists the commands. |
+| `⌥ Space` | Opens the same bar without typing `/lina`. |
 
 The first time you use each part, a small tip appears under your own text with a `^` pointing at it.
 
@@ -75,6 +75,7 @@ On first launch, onboarding walks you through:
    NEBIUS_API_KEY=…    # tokenfactory.nebius.com: checks, commands, /lina model, /lina image
    GEMINI_API_KEY=…    # aistudio.google.com/apikey: live web answers (optional)
    ```
+   This is the developer setup. In the released app, people sign up instead and the keys stay on Lina's server; see [docs/PRODUCTION.md](docs/PRODUCTION.md).
    To keep commands on your Mac, choose **On this Mac** and run `ollama serve` with `ollama pull llama3.2`.
 3. **A practice page.** Lina opens one in TextEdit with things to try.
 
@@ -106,12 +107,12 @@ Lina talks to Token Factory through its OpenAI-compatible endpoints (`/chat/comp
 
 ```
  Any app (Notes, Mail, Safari, …)
-        │  keystrokes (CGEventTap): notices "/lina …" + , . ? ! ↩  and finished sentences
+        │  keystrokes (CGEventTap): "/lina" opens the command bar; a pause after a sentence starts a check
         ▼
  ┌──────────────┐  reads the field (AXUIElement)  ┌──────────────────────────────┐
  │ LinaEngine   │ ──────────────────────────────▶ │ Nemotron · FLUX · Gemini     │
  └──────┬───────┘                                 └──────────────────────────────┘
-        │  card under the line (non-activating NSPanel), squiggles under mistakes, ^ tips
+        │  fix chips above mistakes, cards under the line (non-activating NSPanels), ^ tips
         ▼
  ⌘1 / ⌘2 / ⌘3  →  selects the exact range via Accessibility and pastes; your clipboard is restored
 ```
@@ -130,7 +131,7 @@ Sources/Lina
 
 - Lina reads only when you type `/lina` or finish a sentence, never password fields or secure input, and you can pause her per app.
 - What's sent: the finished sentence for checks; the paragraph for commands; the question and nearby words to Gemini for search; only the description for pictures. Settings → Privacy spells it out.
-- No account, telemetry or analytics. API keys are stored in the macOS Keychain. Saved items are a JSON file on your Mac.
+- No account, telemetry or analytics in this developer build. Development keys are kept in a file only your user can read. Saved items are a JSON file on your Mac.
 
 ## Develop
 
