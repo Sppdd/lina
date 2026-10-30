@@ -8,3 +8,8 @@ build/
 supabase/.temp/
 supabase/.branches/
 media/
+docs/VIDEO_SCRIPT.md
+scripts/demo-gif/scene.html
+scripts/demo-gif/make-video.sh
+scripts/demo-gif/video-cards.html
+scripts/demo-gif/scene.html

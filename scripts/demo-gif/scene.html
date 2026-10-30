@@ -143,6 +143,16 @@ const scenes = [
   [27.4, 30.0, null, null, '', '', t => ({ end: true, face: 'ready', status: 'Ready' })],
 ];
 const DURATION = scenes[scenes.length - 1][1];
+// For the demo video: play scene time on a timeline of pieces [seconds on screen, scene from, scene to],
+// so a moment (like a card waiting for ⌘1) can be held while the narration catches up.
+function renderPieces(pieces, t) {
+  for (const [d, a, b] of pieces) {
+    if (t < d) return render(a + (b - a) * (t / d));
+    t -= d;
+  }
+  const [, , last] = pieces[pieces.length - 1];
+  return render(last - 0.001);
+}
 
 function render(t) {
   const sc = scenes.find(s => t >= s[0] && t < s[1]) || scenes[scenes.length - 1];
@@ -164,7 +174,13 @@ function render(t) {
   return true;
 }
 // ?scale=1.5 renders the same 960×640 scene at 1440×960 for a sharper GIF.
-const scale = +new URLSearchParams(location.search).get('scale') || 1;
+const params = new URLSearchParams(location.search);
+const scale = +params.get('scale') || 1;
+// ?wide=1 widens the desk to 16:9 (1138×640) for the demo video; the window stays centered.
+if (params.get('wide')) {
+  for (const el of [document.documentElement, document.body]) el.style.width = '1138px';
+  document.getElementById('win').style.left = ((1138 - 760) / 2) + 'px';
+}
 if (scale !== 1) document.documentElement.style.zoom = scale;
 render(0);
 </script>
