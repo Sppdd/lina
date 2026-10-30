@@ -62,6 +62,11 @@ final class LinaEngine: ObservableObject {
     private var celebrating = false
     private var errorUntil = Date.distantPast
     private var noticeTimer: DispatchWorkItem?
+    /// Hold ⌃⌥ to say a command.
+    private let voiceInput = VoiceInput()
+    private var talkHold: DispatchWorkItem?
+    /// "Ask me when I pause": the writer's last keystroke, and the question waiting for the pause.
+    private var pendingAsk: DispatchWorkItem?
 
     /// What ⌘1, ⌘2… do for the card on screen.
     private enum CardAction {
@@ -139,6 +144,9 @@ final class LinaEngine: ObservableObject {
         monitor.onMouseDown = { [weak self] in
             MainActor.assumeIsolated { self?.mouseDown() }
         }
+        monitor.onFlagsChanged = { [weak self] flags in
+            MainActor.assumeIsolated { self?.flagsChanged(flags) }
+        }
         cards.onChoose = { [weak self] n in
             guard let self else { return }
             if self.fixState != nil { self.applyFix(n) } else { self.choose(n) }
@@ -152,6 +160,7 @@ final class LinaEngine: ObservableObject {
                     guard let self else { return }
                     if let app, app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
                         self.currentApp = (app.localizedName ?? "", app.bundleIdentifier ?? "")
+                        Diagnostics.lastApp = app
                         self.typed = ""
                         self.inline?.dirty = true
                         self.dismiss()
@@ -233,6 +242,10 @@ final class LinaEngine: ObservableObject {
     }
 
     private func handleKey(_ event: CGEvent) -> Bool {
+        // A key pressed while ⌃⌥ is held is a shortcut (like ⌃⌥M), not the start of talking.
+        talkHold?.cancel()
+        talkHold = nil
+        scheduleAsk()
         let flags = event.flags
         let code = event.keyCode
         let cmd = flags.contains(.maskCommand)
@@ -392,6 +405,106 @@ final class LinaEngine: ObservableObject {
             handledSet.remove(old)
         }
         return true
+    }
+
+    // MARK: Talking
+
+    /// Holding ⌃⌥ on their own for a moment starts listening; letting go runs what was said as a command.
+    private func flagsChanged(_ flags: CGEventFlags) {
+        let held = flags.contains(.maskControl) && flags.contains(.maskAlternate)
+            && !flags.contains(.maskCommand) && !flags.contains(.maskShift)
+        if held {
+            guard settings.talkEnabled, settings.enabled, talkHold == nil, !voiceInput.isListening,
+                  !Self.linaIsInFront, inline == nil, isTrusted else { return }
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated { self?.startListening() }
+            }
+            talkHold = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+        } else {
+            talkHold?.cancel()
+            talkHold = nil
+            if voiceInput.isListening { stopListening() }
+        }
+    }
+
+    private func startListening() {
+        talkHold = nil
+        tips.hide()
+        hideCard()
+        Task { [weak self] in
+            guard let self else { return }
+            guard await self.voiceInput.start() else {
+                Diagnostics.log("voice", "couldn't start listening")
+                self.notice(VoiceInput.isAvailable
+                            ? "I need the microphone and speech recognition. Allow them in System Settings → Privacy & Security."
+                            : "Talking needs the app build (scripts/build-app.sh).",
+                            .worried, at: AX.snapshot(requireCaret: false)?.caretRect ?? self.mouseAnchor, seconds: 5)
+                return
+            }
+            Diagnostics.log("voice", "listening")
+            self.set(.listening)
+        }
+    }
+
+    private func stopListening() {
+        Task { [weak self] in
+            guard let self else { return }
+            let said = await self.voiceInput.stop()
+            self.set(.ready)
+            Diagnostics.log("voice", "heard \(said.count) chars")
+            guard !said.isEmpty else { return }
+            self.runSpoken(said)
+        }
+    }
+
+    /// What the writer said becomes a `/lina …` command at the caret, run just as if they had typed it.
+    private func runSpoken(_ said: String) {
+        guard settings.enabled, !Self.linaIsInFront, inline == nil,
+              let app = NSWorkspace.shared.frontmostApplication else { return }
+        var body = said
+        if body.lowercased().hasPrefix("lina") { body = String(body.dropFirst(4)).trimmingCharacters(in: .punctuationCharacters.union(.whitespaces)) }
+        let text = "/lina " + body
+        let before = typed
+        TextInserter.type(text)
+        typed += text
+        inline = Inline(pid: app.processIdentifier, text: text, before: before)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            MainActor.assumeIsolated {
+                self?.markInline()
+                self?.runInline()
+            }
+        }
+    }
+
+    private var mouseAnchor: CGRect {
+        CGRect(x: NSEvent.mouseLocation.x, y: NSEvent.mouseLocation.y - 20, width: 1, height: 18)
+    }
+
+    // MARK: Ask when I pause
+
+    /// Opt-in: after the writer stops for `askPause` seconds, Lina asks her one question, as if they typed /lina.
+    private func scheduleAsk() {
+        pendingAsk?.cancel()
+        guard settings.askOnPause, settings.enabled else { return }
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.askAfterPause() }
+        }
+        pendingAsk = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(2, settings.askPause), execute: work)
+    }
+
+    private func askAfterPause() {
+        guard settings.askOnPause, settings.enabled, settings.isModelConfigured, isTrusted, !Self.linaIsInFront,
+              inline == nil, fixState == nil, cards.model.content == nil, !voiceInput.isListening,
+              let snap = AX.snapshot(requireCaret: false), !settings.disabledApps.contains(snap.bundleID),
+              snap.selection.length == 0
+        else { return }
+        let about = snap.text.substring(to: snap.selection.location).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Only once per stretch of new writing, and only when there's enough to think about.
+        guard WordCount.count(about) >= 25, remember("ask|\(snap.bundleID)|\(about.suffix(160))") else { return }
+        Diagnostics.log("ask", "asking after a pause in \(snap.appName)")
+        question(about: String(about.suffix(4000)), app: snap.appName, anchor: anchor(snap, at: max(0, snap.selection.location - 1)))
     }
 
     // MARK: Inline commands
@@ -583,6 +696,7 @@ final class LinaEngine: ObservableObject {
 
     private func run(_ kind: LinaCommand.Kind, _ ctx: CommandContext) {
         tips.hide()
+        Diagnostics.log("command", "\(Self.name(of: kind)) in \(ctx.app), field \(ctx.snap == nil ? "not readable" : "readable")")
         let anchor = ctx.anchor
         let needsModel: Bool = switch kind {
         case .help, .saved, .remember, .bug: false
@@ -697,6 +811,24 @@ final class LinaEngine: ObservableObject {
         }
     }
 
+    /// The command's name without what the writer typed, for the log.
+    private static func name(of kind: LinaCommand.Kind) -> String {
+        switch kind {
+        case .ask: "ask"
+        case .fix: "fix"
+        case .rewrite: "rewrite"
+        case .edit: "edit"
+        case .model: "model"
+        case .image: "image"
+        case .help: "help"
+        case .saved: "saved"
+        case .remember: "remember"
+        case .gathered: "gathered"
+        case .bug: "bug"
+        case .search: "search"
+        }
+    }
+
     // MARK: Jobs
 
     private func begin(_ label: String?, anchor: CGRect) -> Int {
@@ -718,6 +850,7 @@ final class LinaEngine: ObservableObject {
         if let e = error as? URLError, e.code == .cancelled { return }
         removeLeftCommand()
         finishInline()
+        Diagnostics.log("error", error.localizedDescription)
         errorUntil = Date().addingTimeInterval(10)
         var message = error.localizedDescription
         if settings.isSignedIn && Self.isSignedOut(error) {

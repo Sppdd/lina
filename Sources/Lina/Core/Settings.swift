@@ -144,7 +144,7 @@ final class AppSettings: ObservableObject {
             ?? nebiusNames.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
             ?? DotEnv.first(of: nebiusNames)
             ?? ""
-        let geminiNames = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "LINA_GEMINI_API_KEY"]
+        let geminiNames = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "LINA_GEMINI_API_KEY", "GEMINI-API-KEY"]
         geminiKey = Secrets.get("gemini-api-key")
             ?? geminiNames.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
             ?? DotEnv.first(of: geminiNames)

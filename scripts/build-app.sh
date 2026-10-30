@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP=build/Lina.app
-VERSION=${VERSION:-1.0.0}
+VERSION=${VERSION:-2.1.0}
 
 echo "› Compiling"
 swift build -c release --arch arm64 2>&1 | tail -1
@@ -55,6 +55,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>NSHumanReadableCopyright</key><string>Open source under the MIT License.</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+  <key>NSMicrophoneUsageDescription</key><string>Hold ⌃⌥ to say a command to Lina. Your voice is turned into text on this Mac.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Lina turns what you say into a /lina command, on this Mac when your language supports it.</string>
   <key>LinaSupabaseURL</key><string>${SUPABASE_URL}</string>
   <key>LinaSupabaseAnonKey</key><string>${SUPABASE_ANON_KEY}</string>
 </dict>

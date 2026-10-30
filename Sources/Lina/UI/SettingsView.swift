@@ -9,6 +9,7 @@ struct SettingsView: View {
             GeneralSettings(engine: engine).tabItem { Label("General", systemImage: "gearshape") }
             ModelSettings().tabItem { Label("Models", systemImage: "cpu") }
             SearchSettings().tabItem { Label("Search", systemImage: "globe") }
+            MemorySettings().tabItem { Label("Memory", systemImage: "brain") }
             VoiceSettings().tabItem { Label("Voice", systemImage: "text.quote") }
             AppsSettings().tabItem { Label("Apps", systemImage: "square.grid.2x2") }
             PrivacySettings().tabItem { Label("Privacy", systemImage: "lock") }
@@ -40,12 +41,25 @@ private struct GeneralSettings: View {
                     }
                 }
                 .disabled(!settings.checkSentences)
+                Toggle("Ask me a question when I pause", isOn: $settings.askOnPause)
+                LabeledContent("After I stop typing for") {
+                    HStack {
+                        Slider(value: $settings.askPause, in: 3...30, step: 1)
+                            .frame(width: 170)
+                        Text("\(Int(settings.askPause)) s")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                }
+                .disabled(!settings.askOnPause)
+                Toggle("Hold ⌃⌥ to say a command", isOn: $settings.talkEnabled)
                 Toggle("Show tips under my text while I learn", isOn: $settings.showTips)
                 Button("Show tips again") { engine.tips.reset() }
             } header: {
                 Text("Lina")
             } footer: {
-                Text("Lina reads only when you type /lina or stop typing after a sentence. A /lina command stays in your text, tinted and underlined, and Return runs it. Fixes appear right above your mistakes; nothing goes into your text until you press ⌘1, ⌘2… or ⌘A for all of them.")
+                Text("Lina reads only when you type /lina, hold ⌃⌥ and talk, or stop typing after a sentence (and, if you turn it on, after a longer pause). A /lina command stays in your text, tinted and underlined, and Return runs it. Fixes appear right above your mistakes; nothing goes into your text until you press ⌘1, ⌘2… or ⌘A for all of them.")
                     .foregroundStyle(.secondary)
             }
 
@@ -58,10 +72,13 @@ private struct GeneralSettings: View {
                 LabeledContent("Take one fix or option") { HStack(spacing: 4) { KeyCap("⌘1", size: 12); KeyCap("⌘2", size: 12); KeyCap("⌘3", size: 12) } }
                 LabeledContent("Take every fix") { KeyCap("⌘A", size: 12) }
                 LabeledContent("Dismiss a card") { KeyCap("esc", size: 12) }
+                LabeledContent("Remember the highlighted text") { KeyCap(HotKeyCenter.memoryTitle, size: 12) }
+                LabeledContent("Say a command") { Text("Hold ⌃⌥").foregroundStyle(.secondary) }
                 LabeledContent("Undo a choice") { KeyCap("⌘Z", size: 12) }
             }
 
             Section {
+                Toggle("Send problem reports to the Lina team", isOn: $settings.shareReports)
                 Toggle("Open Lina at login", isOn: Binding(
                     get: { settings.launchAtLogin }, set: { settings.launchAtLogin = $0 }))
                 LabeledContent("Accessibility") {
@@ -140,6 +157,7 @@ struct ModelSettings: View {
                     Text("Works with Ollama (`ollama serve`), LM Studio, or llama.cpp's server. Web search still uses Gemini when you add a key; pictures need Token Factory.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Section("Models on this Mac") { LocalModelsList() }
             }
 
             Section {
@@ -271,6 +289,17 @@ private struct SearchSettings: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+            Section {
+                Toggle("Look things up on Wikipedia", isOn: $settings.webLookup)
+                    .disabled(settings.hasSearch)
+            } header: {
+                Text("Without Gemini")
+            } footer: {
+                Text(settings.hasSearch
+                     ? "Gemini answers your searches, so Wikipedia isn't used."
+                     : "Lina sends only your question to Wikipedia, in its language, and answers from those pages with a link. Off, the model answers from memory.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(height: 500)
@@ -295,6 +324,167 @@ private struct SearchSettings: View {
             } catch {
                 testState = .failed(error.localizedDescription)
             }
+        }
+    }
+}
+
+/// Ollama's models on this Mac: download the recommended one with progress, switch, or delete.
+struct LocalModelsList: View {
+    @ObservedObject var models = LocalModels.shared
+    @ObservedObject var settings = AppSettings.shared
+    var compact = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            switch models.status {
+            case .unknown:
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Looking for Ollama…").foregroundStyle(.secondary) }
+            case .offline:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Ollama isn't running at \(settings.localBaseURL).").font(.callout)
+                    HStack {
+                        Link("Get Ollama →", destination: URL(string: "https://ollama.com/download")!)
+                        Spacer()
+                        Button("Check again") { Task { await models.refresh() } }
+                    }
+                    .font(.callout)
+                }
+            case .ready:
+                if !compact {
+                    ForEach(models.installed) { m in
+                        HStack {
+                            Image(systemName: isCurrent(m.name) ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(isCurrent(m.name) ? Theme.ink : .secondary)
+                            Text(m.name)
+                            Text(m.size).font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            if !isCurrent(m.name) { Button("Use") { settings.localModel = m.name }.buttonStyle(.borderless) }
+                            Button { Task { await models.delete(m.name) } } label: { Image(systemName: "trash") }
+                                .buttonStyle(.borderless).help("Delete \(m.name) from this Mac")
+                        }
+                    }
+                }
+                ForEach(LocalModels.suggestions.filter { !models.has($0.name) }) { s in
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(s.name).font(.system(size: 13, weight: .medium))
+                                if s.name == LocalModels.recommended.name {
+                                    Text("Recommended for this Mac").font(.system(size: 10, weight: .semibold))
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Capsule().fill(Theme.ink.opacity(0.12)))
+                                }
+                            }
+                            Text(s.blurb).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if models.pulling == s.name {
+                            Button("Stop") { models.cancelPull() }.buttonStyle(.borderless)
+                        } else {
+                            Button("Download") { models.pull(s.name) }.disabled(models.pulling != nil)
+                        }
+                    }
+                }
+                if compact, let m = models.installed.first(where: { isCurrent($0.name) }) {
+                    Label("Using \(m.name)", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.ink).font(.callout)
+                }
+            }
+            if let name = models.pulling {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let p = models.progress { ProgressView(value: p) } else { ProgressView().progressViewStyle(.linear) }
+                    Text("\(name): \(models.pullStatus)\(models.progress.map { " · \(Int($0 * 100))%" } ?? "")")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if let e = models.error { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption) }
+        }
+        .task { await models.refresh() }
+        .onChange(of: settings.localBaseURL) { _, _ in Task { await models.refresh() } }
+    }
+
+    private func isCurrent(_ name: String) -> Bool {
+        name == settings.localModel || name == settings.localModel + ":latest"
+    }
+}
+
+// MARK: Memory
+
+struct MemorySettings: View {
+    @ObservedObject var memory = MemoryStore.shared
+
+    var body: some View {
+        Form {
+            Section {
+                if memory.items.isEmpty {
+                    Text("Nothing yet.").foregroundStyle(.secondary)
+                }
+                ForEach(memory.items) { item in
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.text).font(Theme.serif(13)).lineLimit(4).textSelection(.enabled)
+                            Text("\(item.source) · \(item.date.formatted(date: .abbreviated, time: .omitted))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { memory.remove(item.id) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                            .help("Forget this")
+                    }
+                    .padding(.vertical, 2)
+                }
+            } header: {
+                HStack {
+                    Text("What Lina remembers")
+                    Spacer()
+                    if !memory.items.isEmpty { Button("Forget all") { memory.removeAll() }.buttonStyle(.borderless) }
+                }
+            } footer: {
+                Text("Highlight text anywhere and press \(HotKeyCenter.memoryTitle), or type “/lina remember …” and press return. Lina keeps these on this Mac and uses them whenever she answers you.")
+                    .foregroundStyle(.secondary)
+            }
+            GatheredSection()
+        }
+        .formStyle(.grouped)
+        .frame(height: 500)
+    }
+}
+
+/// Clipboard and screenshot history for "Use what I gathered" in the palette.
+private struct GatheredSection: View {
+    @ObservedObject var settings = AppSettings.shared
+    @ObservedObject var clippings = Clippings.shared
+
+    var body: some View {
+        Section {
+            Toggle("Keep what I copy and screenshot", isOn: $settings.gatherClippings)
+            if settings.gatherClippings {
+                if clippings.items.isEmpty {
+                    Text("Nothing gathered yet. Copy a quote or take a screenshot.").foregroundStyle(.secondary)
+                }
+                ForEach(clippings.items) { item in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: item.kind == .screenshot ? "camera.viewfinder" : "doc.on.clipboard")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.text).font(Theme.serif(13)).lineLimit(3).textSelection(.enabled)
+                            Text("\(item.source) · \(item.date.formatted(date: .omitted, time: .shortened))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { clippings.remove(item.id) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                    }
+                }
+            }
+        } header: {
+            HStack {
+                Text("What you gathered")
+                Spacer()
+                if !clippings.items.isEmpty { Button("Clear") { clippings.removeAll() }.buttonStyle(.borderless) }
+            }
+        } footer: {
+            Text("Then type “/lina gathered” where you write. Screenshots are read on this Mac. Lina keeps the last \(Clippings.limit) items in memory only and forgets them when it quits. It skips passwords and apps you turn off.")
+                .foregroundStyle(.secondary)
         }
     }
 }

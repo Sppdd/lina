@@ -79,6 +79,10 @@ struct MenuBarView: View {
                     closeMenu()
                     WindowOpener.shared.settings()
                 }
+                MenuRow(title: "Report a Problem…", symbol: "ladybug", shortcut: nil) {
+                    closeMenu()
+                    WindowOpener.shared.open("report")
+                }
                 Divider().padding(.vertical, 4)
                 MenuRow(title: "Quit Lina", symbol: "power", shortcut: "⌘Q") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
@@ -92,7 +96,7 @@ struct MenuBarView: View {
         let app = engine.currentApp.name
         switch engine.status {
         case .ready: return app.isEmpty ? "Ready when you are" : "Ready in \(app)"
-        case .listening: return "Listening… press Return to run it"
+        case .listening: return "Listening… Return (or letting go of ⌃⌥) runs it"
         case let .working(label): return label
         case .waiting: return "Waiting for your ⌘ choice"
         case .off: return "Off"
