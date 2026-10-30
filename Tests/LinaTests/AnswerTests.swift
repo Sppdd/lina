@@ -140,6 +140,18 @@ final class AnswerTests: XCTestCase {
         XCTAssertEqual(out, "Hello  world<b>")
     }
 
+    @MainActor
+    func testLinaPosesEveryMood() {
+        let lina = LinaModel()
+        for mood in Mood.allCases {
+            lina.pose(mood, head: true, animated: false)
+            lina.pose(mood, head: false, animated: true)
+        }
+        XCTAssertNotNil(lina.camera.camera)
+        XCTAssertEqual(LinaModel.Expression.of(.happy).eyes, .smiling)
+        XCTAssertEqual(LinaModel.Expression.of(.sleeping).mouth, .small)
+    }
+
     func testWordCount() {
         XCTAssertEqual(WordCount.count("It's a quiet, small room."), 5)
     }

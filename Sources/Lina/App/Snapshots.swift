@@ -9,6 +9,7 @@ enum Snapshots {
         guard let i = args.firstIndex(of: "--snapshots"), args.count > i + 1 else { return }
         let dir = URL(fileURLWithPath: args[i + 1], isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        LinaFace.live = false
 
         let typo = UseCase.typoSentence as NSString
         let fixes = UseCase.typoFixes.map { f in
@@ -71,6 +72,26 @@ enum Snapshots {
                     }
                 }
             }.padding(20).background(Theme.paper), size: nil, dark: dark, to: dir.appendingPathComponent("moods\(suffix).png"))
+            // Lina in 3D, large, for checking her against the reference art in media/.
+            for head in [true, false] {
+                render(VStack(spacing: 10) {
+                    HStack(spacing: 14) {
+                        ForEach(Mood.allCases) { mood in
+                            VStack(spacing: 4) {
+                                LinaFace(mood: mood, head: head).frame(width: head ? 190 : 230, height: head ? 196 : 230)
+                                Text(mood.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(mood.hair)
+                            }
+                        }
+                    }
+                    HStack(spacing: 18) {
+                        Image(nsImage: LinaFaceImage.image(.idle)).frame(width: 18, height: 19)
+                        LinaFace(mood: .found, head: true).frame(width: 26, height: 27)
+                        LinaFace(mood: .idle, head: true).frame(width: 40, height: 41)
+                        Text("menu bar 18 · card 26 · legend 40").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }.padding(20).background(dark ? Color(red: 0.08, green: 0.07, blue: 0.2) : Theme.paper),
+                       size: nil, dark: dark, to: dir.appendingPathComponent("lina-3d-\(head ? "head" : "bust")\(suffix).png"))
+            }
         }
         HomeNavigation.shared.section = .meet
         print("Snapshots written to \(dir.path)")

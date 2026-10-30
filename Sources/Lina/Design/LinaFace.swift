@@ -48,22 +48,54 @@ enum Mood: String, CaseIterable, Identifiable {
     }
 }
 
-/// Lina herself: a line-drawn portrait in the style of Notion's illustrations.
-/// `head` crops to her face for small places like the menu bar.
+/// Lina herself, in 3D (`LinaModel`): moving where `animated`, a still picture elsewhere.
+/// `head` crops to her face for small places like cards and the menu bar.
+/// Macs without Metal get her earlier line drawing instead.
 struct LinaFace: View {
     var mood: Mood = .idle
     var head = false
     var animated = false
 
+    /// Off while rendering snapshots to PNG: live 3D views don't draw into an offscreen window.
+    static var live = true
+
     var body: some View {
-        if animated {
-            TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
-                FaceCanvas(mood: mood, head: head,
-                           blink: Self.isBlinking(timeline.date.timeIntervalSinceReferenceDate))
+        GeometryReader { geo in
+            Group {
+                if !LinaRender.isAvailable {
+                    flat
+                } else if animated && Self.live {
+                    Lina3DView(mood: mood, head: head)
+                } else if let still = LinaRender.image(mood, points: Self.renderHeight(geo.size.height), head: head) {
+                    Image(nsImage: still).resizable().interpolation(.high)
+                } else {
+                    flat
+                }
             }
-        } else {
-            FaceCanvas(mood: mood, head: head, blink: false)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
+        .aspectRatio(head ? LinaModel.headAspect : 1, contentMode: .fit)
+        .allowsHitTesting(false)
+        .accessibilityElement()
+        .accessibilityLabel("Lina, \(mood.title.lowercased())")
+    }
+
+    private var flat: some View {
+        Group {
+            if animated {
+                TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
+                    FaceCanvas(mood: mood, head: head,
+                               blink: Self.isBlinking(timeline.date.timeIntervalSinceReferenceDate))
+                }
+            } else {
+                FaceCanvas(mood: mood, head: head, blink: false)
+            }
+        }
+    }
+
+    /// Stills are rendered at a few fixed heights and scaled, so a handful of pictures cover every size.
+    static func renderHeight(_ height: CGFloat) -> CGFloat {
+        [32, 64, 128, 256].first { $0 >= height } ?? 256
     }
 
     static func isBlinking(_ t: TimeInterval) -> Bool { t.truncatingRemainder(dividingBy: 4.3) < 0.14 }
@@ -279,6 +311,7 @@ enum LinaFaceImage {
     private static var cache: [String: NSImage] = [:]
 
     static func image(_ mood: Mood, size: CGFloat = 18, head: Bool = true) -> NSImage {
+        if let still = LinaRender.image(mood, points: size, head: head) { return still }
         let key = "\(mood.rawValue)-\(size)-\(head)"
         if let hit = cache[key] { return hit }
         let renderer = ImageRenderer(content: FaceCanvas(mood: mood, head: head, blink: false)
