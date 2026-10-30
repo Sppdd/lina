@@ -236,7 +236,9 @@ Lina takes out the command and records that exact moment.
 
 ### Then
 
-The report is copied to your clipboard and saved to `~/Library/Logs/Lina/reports/latest.md`. In Claude Code, just say:
+The report is copied to your clipboard and saved to `~/Library/Logs/Lina/reports/latest.md`. It is also sent to the Lina team, so you don't have to paste it anywhere. To keep reports on your Mac only, untick **Also send it to the Lina team** in the report window, or switch off **Settings → General → Problem reports**.
+
+In Claude Code, you can also just say:
 
 > read my latest Lina report
 
@@ -268,4 +270,4 @@ If `⌥ Space` clashes with another app, change it in **Settings → General →
 - **Paused apps:** Lina stays out of password managers, Keychain Access, Terminal and iTerm by default. You can change the list in **Settings → Apps**. It never reads password fields.
 - **Apps where the drop doesn't appear:** some apps don't tell macOS where the cursor is, so the drop can't follow it there. File a `/lina bug` and the report will show it.
 - **`⌃⌥` shortcuts:** holding `⌃⌥` with another key (such as `⌃⌥→`) is treated as a shortcut, not talking, so your existing shortcuts keep working.
-- **Privacy:** with **On this Mac**, nothing leaves your Mac except picture requests, which always go to Token Factory. Your API key, memory and logs are stored in files only your user account can read.
+- **Privacy:** with **On this Mac**, nothing leaves your Mac except picture requests, which always go to Token Factory, and problem reports you create, which go to the Lina team unless you switch that off. Reports never contain what you wrote. Your API key, memory and logs are stored in files only your user account can read.

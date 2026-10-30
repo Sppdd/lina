@@ -711,8 +711,16 @@ final class Companion: ObservableObject {
             // Describe the field before touching it, so the report shows the moment the writer saw.
             let focus = site.element == nil ? "- The Desk: \(site.text.length) characters, caret at \(site.caret)" : AX.describeFocus()
             write(.text(""), over: cmd.range, expecting: commandText, in: site)
-            let saved = Diagnostics.report(cmd.reportNote, kind: "Reported with /lina bug, right where it happened", focus: focus)
-            ink.say(saved == nil ? "I couldn't save the report" : "report copied · paste it to Claude", hold: 3)
+            let kind = "Reported with /lina bug, right where it happened"
+            let saved = Diagnostics.report(cmd.reportNote, kind: kind, focus: focus)
+            guard let saved else { ink.say("I couldn't save the report", hold: 3); return }
+            guard settings.shareReports else { ink.say("report copied · paste it to Claude", hold: 3); return }
+            ink.say("report copied · sending it…", hold: 3)
+            let note = cmd.reportNote
+            Task { [weak self] in
+                let ok = await Cloud.send(reportAt: saved, kind: kind, note: note)
+                self?.ink.say(ok ? "report sent to the Lina team" : "couldn't send it · it's saved and copied", hold: 3)
+            }
         case .remember:
             let text = cmd.memoryText
             guard !text.isEmpty else { ink.say("there's nothing above to remember"); return }

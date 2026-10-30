@@ -103,6 +103,15 @@ private struct GeneralSettings: View {
                 LabeledContent("Dismiss") { KeyCap("esc", size: 12) }
             }
 
+            Section {
+                Toggle("Send problem reports to the Lina team", isOn: $settings.shareReports)
+            } header: {
+                Text("Problem reports")
+            } footer: {
+                Text("When you create a report or type /lina bug, Lina saves it on this Mac and, with this on, sends a copy so the problem can be fixed. Reports have no document text in them: only app names, lengths, settings and Lina's decisions.")
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Daily goal") {
                 Stepper(value: $settings.dailyGoal, in: 100...5000, step: 50) {
                     Text("\(settings.dailyGoal) words a day")

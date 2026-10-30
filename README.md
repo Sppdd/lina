@@ -56,7 +56,7 @@ New to Lina? **[How to use Lina](docs/USAGE.md)** walks through every feature wi
 | **Modes (`⇧⌥ Space`)** | Cycle like Claude Code's modes. **Understand** reads along and asks questions, and never edits. **Edit** offers a rewrite of each sentence you finish; `⇥` takes it, `esc` keeps yours. **Auto** rewrites each sentence you finish in place, and `⌘Z` undoes it. In Edit or Auto, `⌥ Space` rewrites the sentence at the cursor right away, even an unfinished one. |
 | **Ink drop** | A drop of Lina's ink rides just above your text cursor in any app, and Lina's cards, rewrites and notes are written beside it. It breathes while it rests, swirls while Lina thinks and becomes a waveform while it listens. When Lina finds a thread worth following, the drop flies to those words in your draft and underlines them. **Show me where** in the popup does it again. |
 | **Hold `⌃⌥` to talk** | Speak instead of typing. In Understand you answer Lina's question; in Edit and Auto you say how to rewrite the sentence at your cursor ("make it warmer"). Speech is recognized on your Mac when your language supports it. Lina can also read its questions aloud (off by default). |
-| **Report a problem** | Hard to describe what went wrong? Type `/lina bug` and a few words right where it happened, or pick **Report a Problem…** in the menu bar. Lina writes a report from what it saw (your setup, the text field in front of you, and its recent decisions and errors), copies it, and saves it to `~/Library/Logs/Lina/reports/latest.md`. Reports never include your document's text. |
+| **Report a problem** | Hard to describe what went wrong? Type `/lina bug` and a few words right where it happened, or pick **Report a Problem…** in the menu bar. Lina writes a report from what it saw (your setup, the text field in front of you, and its recent decisions and errors), copies it, saves it to `~/Library/Logs/Lina/reports/latest.md` and sends it to the Lina team (you can switch that off). Reports never include your document's text. |
 | **Ghost text** *(optional)* | A context-aware continuation appears at the caret in any app after a natural pause, never mid-word. `⇥` keeps it, `⌥⇥` keeps one word, `esc` or typing dismisses it. |
 | **Rewrite palette** | A Spotlight-style palette with **Keep going**, **Find the word**, **Fix grammar**, **Say it clearer**, **Give it feeling**, **Tighten**, **I'm stuck**, **Look it up**, or any instruction you type. `↩` replaces, `⌘↩` inserts after. |
 | **The Desk** | A calm serif writing space with inline ghost text, typewriter scrolling and a focus mode. Pages are plain Markdown files. |
@@ -152,7 +152,8 @@ The ink drop, pointing and hold-to-talk are adapted from [Clicky](https://github
 ## Privacy
 
 - Lina never reads password fields or secure input, and you can turn it off per app.
-- There's no account, telemetry or analytics. Your API key is stored in `~/Library/Application Support/Lina/secrets.json`, which only your user account can read (mode 0600). Lina doesn't use the Keychain: an ad-hoc-signed build would set off a Keychain permission prompt after every rebuild.
+- There's no account, telemetry or analytics. The only thing Lina sends to its own server is a problem report you create yourself (Supabase, insert-only: no one can read reports back through the app's key). You can switch that off in **Settings → General → Problem reports**.
+- Your API key is stored in `~/Library/Application Support/Lina/secrets.json`, which only your user account can read (mode 0600). Lina doesn't use the Keychain: an ad-hoc-signed build would set off a Keychain permission prompt after every rebuild.
 - Text goes only to the endpoint you choose. With **On this Mac**, nothing leaves your machine, except a `/lina … photo` request, which always goes to Token Factory.
 - Lina keeps a log of its own decisions in `~/Library/Logs/Lina/lina.log` to help explain problems. It records app names, lengths and errors, never what you write.
 - Memory lives in `~/Library/Application Support/Lina/memory.json` (mode 0600). Pictures are saved to `~/Pictures/Lina`.
@@ -162,6 +163,12 @@ The ink drop, pointing and hold-to-talk are adapted from [Clicky](https://github
 ```sh
 swift test                                        # unit tests
 .build/debug/Lina --snapshots build/snapshots     # render every screen, light + dark
+```
+
+The Supabase project (problem reports) lives in `cloud/supabase`. Run the CLI from `cloud/` so it doesn't read the app's `.env`:
+
+```sh
+cd cloud && supabase db push                      # apply migrations to the linked project
 ```
 
 ## Roadmap

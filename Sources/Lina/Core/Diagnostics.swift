@@ -101,7 +101,7 @@ enum Diagnostics {
         - Companion: \(s.companionEnabled ? "on" : "off") · mode \(s.companionMode.title) · pause \(Int(s.companionPauseMs)) ms
         - Ink drop: \(s.inkEnabled ? "on" : "off") · hold to talk: \(s.talkEnabled ? "on" : "off") · read aloud: \(s.speakAloud ? "on" : "off") · ghost text: \(s.enabled ? "on" : "off")
         - Shortcut: \(s.hotKey.title) · paused in: \(s.disabledApps.sorted().joined(separator: ", "))
-        - Memory: \(MemoryStore.shared.items.count) items
+        - Memory: \(MemoryStore.shared.items.count) items · reports sent to the Lina team: \(s.shareReports ? "on" : "off")
 
         ## The text field in front of the writer
         \(focus ?? AX.describeFocus())
