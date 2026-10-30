@@ -123,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.interceptKey = { [weak self] event in self?.companion.handleKey(event) ?? false }
         engine.start()
         if AppSettings.shared.hasOnboarded { companion.start() }
+        Clippings.shared.setEnabled(AppSettings.shared.gatherClippings)
         // Accessibility can be granted at any time; pick it up without a relaunch.
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.engine.refreshStatus() }

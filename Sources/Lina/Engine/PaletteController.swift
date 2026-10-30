@@ -27,6 +27,8 @@ final class PaletteController: ObservableObject {
     @Published private(set) var options: [String] = []
     @Published var optionIndex = 0
     @Published private(set) var target: WritingTarget?
+    /// Wikipedia pages behind a "Look it up" answer, when web lookup is on.
+    @Published private(set) var sources: [WebLookup.Source] = []
 
     private let settings = AppSettings.shared
     private var panel: PalettePanel?
@@ -45,6 +47,7 @@ final class PaletteController: ObservableObject {
     func isAvailable(_ action: WritingAction) -> Bool {
         guard let target else { return false }
         if action == .lookUp { return !query.isEmpty || !target.focusText.isEmpty }
+        if action == .gathered { return !Clippings.shared.items.isEmpty }
         if action.needsTarget { return !target.focusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         if action == .keepGoing || action == .stuck {
             return !target.context.before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -100,11 +103,35 @@ final class PaletteController: ObservableObject {
         guard let target else { return }
         running = action
         runningCustom = nil
-        let messages = Prompts.action(action, ctx: target.context,
-                                      query: query.trimmingCharacters(in: .whitespaces),
-                                      voice: settings.voice, aboutMe: settings.writerNotes)
+        sources = []
+        let q = query.trimmingCharacters(in: .whitespaces)
+        if action == .lookUp, settings.webLookup {
+            lookUpOnWeb(q.isEmpty ? target.focusText : q, target: target)
+            return
+        }
+        let messages = Prompts.action(action, ctx: target.context, query: q,
+                                      voice: settings.voice, aboutMe: settings.writerNotes,
+                                      gathered: action == .gathered ? Clippings.shared.promptText : "")
         start(messages, maxTokens: action.maxTokens, temperature: action.temperature) { [weak self] text in
             if action == .findWord { self?.options = Suggestion.options(text) }
+        }
+    }
+
+    /// Searches Wikipedia first, then answers from what it found. Falls back to the model alone offline.
+    private func lookUpOnWeb(_ question: String, target: WritingTarget) {
+        task?.cancel()
+        result = ""
+        phase = .working
+        task = Task { [weak self] in
+            let found = (try? await WebLookup.search(question)) ?? []
+            guard let self, !Task.isCancelled else { return }
+            Diagnostics.log("lookup", "\(found.count) sources")
+            self.sources = found
+            let messages = Prompts.action(.lookUp, ctx: target.context, query: question,
+                                          voice: self.settings.voice, aboutMe: self.settings.writerNotes,
+                                          sources: found)
+            self.start(messages, maxTokens: WritingAction.lookUp.maxTokens,
+                       temperature: WritingAction.lookUp.temperature, onUpdate: nil)
         }
     }
 
@@ -112,6 +139,7 @@ final class PaletteController: ObservableObject {
         guard let target, !instruction.isEmpty else { return }
         running = nil
         runningCustom = instruction
+        sources = []
         let messages = Prompts.custom(instruction, ctx: target.context, voice: settings.voice, aboutMe: settings.writerNotes)
         start(messages, maxTokens: 700, temperature: 0.6, onUpdate: nil)
     }
@@ -176,6 +204,7 @@ final class PaletteController: ObservableObject {
         phase = .choosing
         result = ""
         options = []
+        sources = []
     }
 
     // MARK: Applying
@@ -207,14 +236,20 @@ final class PaletteController: ObservableObject {
 
     func applyInsert() {
         guard phase == .done, let target, !applyText.isEmpty else { return }
-        let text = applyText
+        let text = applyText + (running == .lookUp ? citation : "")
         close(restore: false)
         target.insertAfterFocus(text)
     }
 
+    /// " (Wikipedia: Apollo 11)" after a looked-up answer, so the fact keeps its source.
+    private var citation: String {
+        guard running == .lookUp, let s = sources.first else { return "" }
+        return " (Wikipedia: \(s.title), \(s.url.absoluteString))"
+    }
+
     func copyResult() {
         guard !applyText.isEmpty else { return }
-        TextInserter.copy(applyText)
+        TextInserter.copy(applyText + citation)
         panel?.flash("Copied")
     }
 

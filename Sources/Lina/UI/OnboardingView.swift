@@ -144,8 +144,7 @@ struct OnboardingView: View {
                 if settings.provider == .nebius {
                     OnboardingKeyField()
                 } else {
-                    Text("Start Ollama and run `ollama pull llama3.2`. You can change the server in Settings.")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                    LocalModelsList(compact: true).frame(width: 472)
                 }
             }
         }

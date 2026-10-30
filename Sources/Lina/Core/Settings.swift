@@ -150,6 +150,12 @@ final class AppSettings: ObservableObject {
     @Published var speakAloud: Bool { didSet { d.set(speakAloud, forKey: "speakAloud") } }
     /// Send problem reports to the Lina team as well as saving them on this Mac.
     @Published var shareReports: Bool { didSet { d.set(shareReports, forKey: "shareReports") } }
+    /// Keep what the writer copies and screenshots (read with on-device OCR) for "Use what I gathered".
+    @Published var gatherClippings: Bool {
+        didSet { d.set(gatherClippings, forKey: "gatherClippings"); Clippings.shared.setEnabled(gatherClippings) }
+    }
+    /// Let "Look it up" search Wikipedia and answer with a source.
+    @Published var webLookup: Bool { didSet { d.set(webLookup, forKey: "webLookup") } }
     @Published var companionModel: String { didSet { d.set(companionModel, forKey: "companionModel") } }
     @Published var imageModel: String { didSet { d.set(imageModel, forKey: "imageModel") } }
     /// How long a pause before the companion reads the draft again.
@@ -180,6 +186,8 @@ final class AppSettings: ObservableObject {
             "talkEnabled": true,
             "speakAloud": false,
             "shareReports": true,
+            "gatherClippings": false,
+            "webLookup": false,
             "companionPauseMs": 2500.0,
             "debounceMs": 550.0,
             "dailyGoal": 500,
@@ -196,6 +204,8 @@ final class AppSettings: ObservableObject {
         talkEnabled = d.bool(forKey: "talkEnabled")
         speakAloud = d.bool(forKey: "speakAloud")
         shareReports = d.bool(forKey: "shareReports")
+        gatherClippings = d.bool(forKey: "gatherClippings")
+        webLookup = d.bool(forKey: "webLookup")
         companionModel = d.string(forKey: "companionModel") ?? Provider.defaultCompanionModel
         imageModel = d.string(forKey: "imageModel") ?? Provider.defaultImageModel
         companionPauseMs = d.double(forKey: "companionPauseMs")

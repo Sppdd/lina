@@ -49,7 +49,7 @@ enum VoicePreset: String, CaseIterable, Identifiable, Codable {
 
 /// What Lina can do from the palette.
 enum WritingAction: String, CaseIterable, Identifiable {
-    case keepGoing, findWord, fixGrammar, clearer, feeling, tighten, stuck, lookUp
+    case keepGoing, findWord, fixGrammar, clearer, feeling, tighten, stuck, lookUp, gathered
 
     var id: String { rawValue }
 
@@ -63,6 +63,7 @@ enum WritingAction: String, CaseIterable, Identifiable {
         case .tighten: "Tighten"
         case .stuck: "I'm stuck"
         case .lookUp: "Look it up"
+        case .gathered: "Use what I gathered"
         }
     }
 
@@ -76,6 +77,7 @@ enum WritingAction: String, CaseIterable, Identifiable {
         case .tighten: "Cut the fat, keep the voice"
         case .stuck: "Questions that get you moving again"
         case .lookUp: "A quick fact, without leaving the page"
+        case .gathered: "Write with what you copied and screenshotted"
         }
     }
 
@@ -89,6 +91,7 @@ enum WritingAction: String, CaseIterable, Identifiable {
         case .tighten: "arrow.down.right.and.arrow.up.left"
         case .stuck: "lightbulb"
         case .lookUp: "magnifyingglass"
+        case .gathered: "tray.full"
         }
     }
 
@@ -97,7 +100,7 @@ enum WritingAction: String, CaseIterable, Identifiable {
 
     var outcome: Outcome {
         switch self {
-        case .keepGoing: .insert
+        case .keepGoing, .gathered: .insert
         case .findWord: .choose
         case .fixGrammar, .clearer, .feeling, .tighten: .replace
         case .stuck, .lookUp: .note
@@ -111,6 +114,7 @@ enum WritingAction: String, CaseIterable, Identifiable {
         case .findWord: 80
         case .keepGoing: 160
         case .stuck, .lookUp: 260
+        case .gathered: 500
         default: 700
         }
     }
@@ -168,7 +172,8 @@ enum Prompts {
     }
 
     static func action(_ action: WritingAction, ctx: WritingContext, query: String,
-                       voice: VoicePreset, aboutMe: String) -> [ChatMessage] {
+                       voice: VoicePreset, aboutMe: String,
+                       gathered: String = "", sources: [WebLookup.Source] = []) -> [ChatMessage] {
         let sys = persona(voice, aboutMe: aboutMe)
         let target = ctx.selection
         let surrounding = String(ctx.before.suffix(2500))
@@ -221,9 +226,28 @@ enum Prompts {
             """
         case .lookUp:
             let q = query.isEmpty ? target : query
+            if sources.isEmpty {
+                task = """
+                Answer this briefly and factually for a writer mid-draft, in 1–3 sentences: \(q)
+                If you are not certain, say so plainly. Don't make up sources.
+                """
+            } else {
+                let refs = sources.enumerated().map { "[\($0.offset + 1)] \($0.element.title): \($0.element.extract)" }
+                    .joined(separator: "\n")
+                task = """
+                Answer this briefly and factually for a writer mid-draft, in 1–3 sentences: \(q)
+                Use only these Wikipedia summaries. If they don't answer it, say so plainly.
+                <sources>\n\(refs)</sources>
+                """
+            }
+        case .gathered:
             task = """
-            Answer this briefly and factually for a writer mid-draft, in 1–3 sentences: \(q)
-            If you are not certain, say so plainly. Don't make up sources.
+            While researching, the writer copied and screenshotted the clippings below (newest first). \
+            Continue their writing with the next few sentences, drawing on whichever clippings fit what they're \
+            writing. Quote exactly when you quote, never invent facts the clippings don't give, and ignore \
+            clippings that don't belong. Output only the new sentences.
+            <clippings>\n\(gathered)</clippings>
+            <text>\n\(surrounding)</text>
             """
         }
         var user = task

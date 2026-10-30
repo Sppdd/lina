@@ -220,6 +220,16 @@ struct PaletteView: View {
             }
             .frame(maxHeight: 300)
             .fixedSize(horizontal: false, vertical: true)
+            if controller.running == .lookUp, !controller.sources.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "book.closed").foregroundStyle(.secondary)
+                    ForEach(controller.sources) { s in
+                        Link(s.title, destination: s.url).lineLimit(1)
+                    }
+                }
+                .font(.system(size: 11.5))
+                .padding(.top, 4)
+            }
         }
     }
 

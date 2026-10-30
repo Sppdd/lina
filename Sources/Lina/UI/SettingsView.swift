@@ -190,9 +190,10 @@ struct ModelSettings: View {
                 } header: {
                     Text("Local server (OpenAI-compatible)")
                 } footer: {
-                    Text("Works with Ollama (`ollama serve`), LM Studio, or llama.cpp's server. Try `ollama pull llama3.2`.")
+                    Text("Works with Ollama (`ollama serve`), LM Studio, or llama.cpp's server.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Section("Models on this Mac") { LocalModelsList() }
             }
 
             Section {
@@ -269,6 +270,85 @@ struct ModelSettings: View {
     }
 }
 
+/// Ollama's models on this Mac: download the recommended one with progress, switch, or delete.
+struct LocalModelsList: View {
+    @ObservedObject var models = LocalModels.shared
+    @ObservedObject var settings = AppSettings.shared
+    var compact = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            switch models.status {
+            case .unknown:
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Looking for Ollama…").foregroundStyle(.secondary) }
+            case .offline:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Ollama isn't running at \(settings.localBaseURL).").font(.callout)
+                    HStack {
+                        Link("Get Ollama →", destination: URL(string: "https://ollama.com/download")!)
+                        Spacer()
+                        Button("Check again") { Task { await models.refresh() } }
+                    }
+                    .font(.callout)
+                }
+            case .ready:
+                if !compact {
+                    ForEach(models.installed) { m in
+                        HStack {
+                            Image(systemName: isCurrent(m.name) ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(isCurrent(m.name) ? Theme.ink : .secondary)
+                            Text(m.name)
+                            Text(m.size).font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            if !isCurrent(m.name) { Button("Use") { settings.localModel = m.name }.buttonStyle(.borderless) }
+                            Button { Task { await models.delete(m.name) } } label: { Image(systemName: "trash") }
+                                .buttonStyle(.borderless).help("Delete \(m.name) from this Mac")
+                        }
+                    }
+                }
+                ForEach(LocalModels.suggestions.filter { !models.has($0.name) }) { s in
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(s.name).font(.system(size: 13, weight: .medium))
+                                if s.name == LocalModels.recommended.name {
+                                    Text("Recommended for this Mac").font(.system(size: 10, weight: .semibold))
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Capsule().fill(Theme.ink.opacity(0.12)))
+                                }
+                            }
+                            Text(s.blurb).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if models.pulling == s.name {
+                            Button("Stop") { models.cancelPull() }.buttonStyle(.borderless)
+                        } else {
+                            Button("Download") { models.pull(s.name) }.disabled(models.pulling != nil)
+                        }
+                    }
+                }
+                if compact, let m = models.installed.first(where: { isCurrent($0.name) }) {
+                    Label("Using \(m.name)", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.ink).font(.callout)
+                }
+            }
+            if let name = models.pulling {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let p = models.progress { ProgressView(value: p) } else { ProgressView().progressViewStyle(.linear) }
+                    Text("\(name): \(models.pullStatus)\(models.progress.map { " · \(Int($0 * 100))%" } ?? "")")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if let e = models.error { Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption) }
+        }
+        .task { await models.refresh() }
+        .onChange(of: settings.localBaseURL) { _, _ in Task { await models.refresh() } }
+    }
+
+    private func isCurrent(_ name: String) -> Bool {
+        name == settings.localModel || name == settings.localModel + ":latest"
+    }
+}
+
 // MARK: Voice
 
 struct VoiceSettings: View {
@@ -336,9 +416,50 @@ struct MemorySettings: View {
                 Text("Highlight text anywhere and press \(HotKeyCenter.memoryTitle), or type “/lina remember …” and press return. Lina keeps these on this Mac and uses them whenever it writes or thinks with you.")
                     .foregroundStyle(.secondary)
             }
+            GatheredSection()
         }
         .formStyle(.grouped)
         .frame(height: 520)
+    }
+}
+
+/// Clipboard and screenshot history for "Use what I gathered" in the palette.
+private struct GatheredSection: View {
+    @ObservedObject var settings = AppSettings.shared
+    @ObservedObject var clippings = Clippings.shared
+
+    var body: some View {
+        Section {
+            Toggle("Keep what I copy and screenshot", isOn: $settings.gatherClippings)
+            if settings.gatherClippings {
+                if clippings.items.isEmpty {
+                    Text("Nothing gathered yet. Copy a quote or take a screenshot.").foregroundStyle(.secondary)
+                }
+                ForEach(clippings.items) { item in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: item.kind == .screenshot ? "camera.viewfinder" : "doc.on.clipboard")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.text).font(Theme.serif(13)).lineLimit(3).textSelection(.enabled)
+                            Text("\(item.source) · \(item.date.formatted(date: .omitted, time: .shortened))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { clippings.remove(item.id) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                    }
+                }
+            }
+        } header: {
+            HStack {
+                Text("What you gathered")
+                Spacer()
+                if !clippings.items.isEmpty { Button("Clear") { clippings.removeAll() }.buttonStyle(.borderless) }
+            }
+        } footer: {
+            Text("Then pick “Use what I gathered” in the palette. Screenshots are read on this Mac. Lina keeps the last \(Clippings.limit) items in memory only and forgets them when it quits. It skips passwords and apps you turn off.")
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -443,6 +564,10 @@ private struct PrivacySettings: View {
                 } else {
                     PrivacyRow(symbol: "desktopcomputer", title: "Stays on this Mac",
                                detail: "Suggestions come from your local model server at \(settings.localBaseURL).")
+                }
+                Toggle(isOn: $settings.webLookup) {
+                    PrivacyRow(symbol: "globe", title: "Look it up on Wikipedia",
+                               detail: "Off by default. When on, “Look it up” sends only your question to Wikipedia and answers with a source.")
                 }
                 PrivacyRow(symbol: "chart.bar", title: "Stats are local",
                            detail: "Word counts and streaks are stored only on this Mac. No analytics, no account.")

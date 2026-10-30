@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP=build/Lina.app
-VERSION=${VERSION:-1.2.0}
+VERSION=${VERSION:-1.3.0}
 
 echo "› Compiling"
 swift build -c release --arch arm64 2>&1 | tail -1

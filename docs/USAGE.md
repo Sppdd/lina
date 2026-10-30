@@ -23,7 +23,7 @@ Lina lives in your menu bar and works in almost any app you write in: Notes, Mai
    ```
    If an older Lina is already running, quit it from the menu bar first (**Quit Lina**, `⌘Q`). Then run `open build/Lina.app`.
 2. **Grant Accessibility access** when the welcome screen asks. Lina uses it to read the text field you're typing in and to find your cursor. If Lina keeps saying access is missing, click **Grant Access** in the menu bar.
-3. **Add a model.** Paste your Nebius Token Factory API key in **Settings → Model**, or pick **On this Mac** and point Lina at Ollama or LM Studio.
+3. **Add a model.** Paste your Nebius Token Factory API key in **Settings → Model**, or pick **On this Mac**. If [Ollama](https://ollama.com/download) is running, Lina lists your models and offers a **Download** button for the one it recommends for your Mac.
 
 Check that it works: open TextEdit, click into a new document and start typing. A small drop of ink should appear just above your cursor.
 
@@ -200,11 +200,27 @@ To review or delete what Lina remembers, open **Settings → Memory**. Each memo
 
 ---
 
+## Writing from your research
+
+Researching something? Let Lina collect what you find.
+
+1. Open **Settings → Memory** and turn on **Keep what I copy and screenshot**.
+2. Copy quotes from Safari or a PDF, and take screenshots (`⇧⌘4`). Lina reads the text in screenshots on your Mac.
+3. Back in your draft, open the palette and pick **Use what I gathered**. Lina writes the next few sentences using only the clippings that fit, and quotes exactly.
+
+Example: you copy *"Apollo 11 landed on July 20, 1969"* and screenshot a photo caption, then write *"The summer my grandfather turned twelve,"*. **Use what I gathered** continues with the real date instead of a guess.
+
+Lina keeps the last 30 items in memory only. It forgets them when it quits or when you turn the switch off, and it never keeps what password managers copy.
+
+**Look it up, with a source.** Turn on **Settings → Privacy → Look it up on Wikipedia**. Then type a question in the palette and pick **Look it up**: Lina searches Wikipedia in your question's language and answers from those pages, with links. `⌘↩` inserts the answer and its citation. Only the question leaves your Mac, never your draft.
+
+---
+
 ## Other tools
 
 | Tool | How to open it | What it's for |
 |---|---|---|
-| **Rewrite palette** | Menu bar → **Rewrite with Lina…** | Keep going, Find the word, Fix grammar, Say it clearer, Give it feeling, Tighten, I'm stuck, Look it up, or your own instruction. `↩` replaces, `⌘↩` inserts after. |
+| **Rewrite palette** | Menu bar → **Rewrite with Lina…** | Keep going, Find the word, Fix grammar, Say it clearer, Give it feeling, Tighten, I'm stuck, Look it up, Use what I gathered, or your own instruction. `↩` replaces, `⌘↩` inserts after. |
 | **Ghost text** | **Settings → General → Ghost text at the cursor** (off by default) | A short continuation in grey after you pause. `⇥` keeps it, `⌥⇥` keeps one word, `esc` dismisses it. |
 | **The Desk** | Menu bar → **Open Desk** | A calm writing space with typewriter scrolling and a focus mode. Everything above works here too. |
 | **Show me where** | The `⌥ Space` reply box, under a reflection | Flies the drop back to the words Lina thinks matter. |
