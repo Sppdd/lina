@@ -22,7 +22,7 @@ final class LinaModel {
     private let hairMaterial = LinaModel.material(.systemPurple, rough: 0.32, coat: 0.55)
     private let bandMaterial = LinaModel.material(.systemPurple, rough: 0.3, coat: 0.4)
 
-    private var eyes: [SCNNode] = []        // the dark ovals: scaled for wide eyes and blinks, moved up for "thinking"
+    private var eyes: [SCNNode] = []        // lids around the dark ovals: scaled for wide eyes and blinks, moved for "thinking"
     private var sparkles: [SCNNode] = []
     private var smileEyes: [SCNNode] = []   // ∩, for happy
     private var closedEyes: [SCNNode] = []  // ∪, for asleep or a blink drawn as lines
@@ -36,7 +36,7 @@ final class LinaModel {
     init() {
         scene.background.contents = NSColor.clear
         scene.lightingEnvironment.contents = Self.environment()
-        scene.lightingEnvironment.intensity = 1.1
+        scene.lightingEnvironment.intensity = 0.8
         scene.rootNode.addChildNode(root)
         addLights()
         addCamera()
@@ -76,8 +76,8 @@ final class LinaModel {
     }
 
     private func frame(head: Bool) {
-        let target = head ? SCNVector3(0, 1.66, 0) : SCNVector3(0, 1.30, 0)
-        camera.position = head ? SCNVector3(0, 1.72, 4.3) : SCNVector3(0, 1.40, 7.0)
+        let target = head ? SCNVector3(0, 1.64, 0) : SCNVector3(0, 1.30, 0)
+        camera.position = head ? SCNVector3(0, 1.70, 4.4) : SCNVector3(0, 1.40, 7.0)
         camera.look(at: target)
     }
 
@@ -229,28 +229,29 @@ final class LinaModel {
 
     // MARK: Building her
 
-    private static let skin = material(NSColor(srgbRed: 0.97, green: 0.85, blue: 0.79, alpha: 1), rough: 0.42, coat: 0.15)
+    private static let skin = material(NSColor(srgbRed: 0.94, green: 0.75, blue: 0.66, alpha: 1), rough: 0.45, coat: 0.15)
     private static let cheek = material(NSColor(srgbRed: 0.94, green: 0.52, blue: 0.57, alpha: 1), rough: 0.18, coat: 0.9)
     private static let eye = material(NSColor(srgbRed: 0.16, green: 0.08, blue: 0.10, alpha: 1), rough: 0.12, coat: 1)
     private static let line = material(NSColor(srgbRed: 0.30, green: 0.14, blue: 0.17, alpha: 1), rough: 0.35, coat: 0.3)
     private static let mouthInside = material(NSColor(srgbRed: 0.42, green: 0.13, blue: 0.17, alpha: 1), rough: 0.3, coat: 0.3)
     private static let white = material(NSColor(srgbRed: 0.99, green: 0.98, blue: 0.97, alpha: 1), rough: 0.25, coat: 0.6)
-    private static let shirt = material(NSColor(srgbRed: 0.93, green: 0.92, blue: 0.95, alpha: 1), rough: 0.62, coat: 0.1)
-    private static let handSkin = material(NSColor(srgbRed: 0.97, green: 0.79, blue: 0.77, alpha: 1), rough: 0.4, coat: 0.2)
+    private static let shirt = material(NSColor(srgbRed: 0.88, green: 0.87, blue: 0.90, alpha: 1), rough: 0.6, coat: 0.1)
+    private static let collar = material(NSColor(srgbRed: 0.84, green: 0.83, blue: 0.87, alpha: 1), rough: 0.5, coat: 0.2)
+    private static let handSkin = material(NSColor(srgbRed: 0.93, green: 0.68, blue: 0.62, alpha: 1), rough: 0.42, coat: 0.2)
 
     /// The face is an ellipsoid: features sit on its surface and face outwards.
-    private static let faceCenter = SCNVector3(0, 1.62, 0)
-    private static let faceRadii = SCNVector3(0.40, 0.50, 0.36)
+    private static let faceCenter = SCNVector3(0, 1.60, 0)
+    private static let faceRadii = SCNVector3(0.385, 0.55, 0.36)
 
     private func buildBody() {
         let body = Self.ellipsoid(SCNVector3(0.58, 0.5, 0.34), Self.shirt)
         body.position = SCNVector3(0, 0.28, -0.06)
         root.addChildNode(body)
 
-        let collar = SCNNode(geometry: SCNTorus(ringRadius: 0.12, pipeRadius: 0.045))
-        collar.geometry?.firstMaterial = Self.shirt
-        collar.position = SCNVector3(0, 0.765, -0.05)
-        collar.scale = SCNVector3(1.15, 1, 0.95)
+        let collar = SCNNode(geometry: SCNTorus(ringRadius: 0.13, pipeRadius: 0.052))
+        collar.geometry?.firstMaterial = Self.collar
+        collar.position = SCNVector3(0, 0.80, -0.05)
+        collar.scale = SCNVector3(1.12, 1, 0.95)
         root.addChildNode(collar)
 
         let neck = SCNNode(geometry: SCNCylinder(radius: 0.085, height: 0.55))
@@ -273,24 +274,27 @@ final class LinaModel {
         head.addChildNode(face)
 
         for side: CGFloat in [-1, 1] {
-            let ear = Self.ellipsoid(SCNVector3(0.045, 0.085, 0.07), Self.skin)
-            ear.position = SCNVector3(0.405 * side, 1.6, -0.01)
+            let ear = Self.ellipsoid(SCNVector3(0.06, 0.1, 0.075), Self.skin)
+            ear.position = SCNVector3(0.395 * side, 1.58, -0.02)
             head.addChildNode(ear)
 
             let cheek = SCNNode(geometry: SCNSphere(radius: 0.095))
             cheek.geometry?.firstMaterial = Self.cheek
-            Self.place(cheek, x: 0.25 * side, y: 1.475, lift: -0.03)
+            Self.place(cheek, x: 0.245 * side, y: 1.45, lift: -0.035)
             head.addChildNode(cheek)
 
-            // Eyes: a holder on the face, and the oval inside it so blinks and looks don't fight.
+            // Eyes: a holder on the face; inside it a lid that wide eyes, looks and blinks move and scale;
+            // inside that the oval itself. (The oval's own scale is its shape, so it's never touched.)
             let holder = SCNNode()
-            Self.place(holder, x: 0.155 * side, y: 1.67, lift: -0.004)
-            let oval = Self.ellipsoid(SCNVector3(0.033, 0.047, 0.021), Self.eye)
+            Self.place(holder, x: 0.155 * side, y: 1.66, lift: -0.004)
+            let lid = SCNNode()
+            let oval = Self.ellipsoid(SCNVector3(0.034, 0.048, 0.021), Self.eye)
             let sparkle = SCNNode(geometry: SCNSphere(radius: 0.009))
             sparkle.geometry?.firstMaterial = Self.white
-            sparkle.position = SCNVector3(0.01, 0.017, 0.016)
-            oval.addChildNode(sparkle)
-            holder.addChildNode(oval)
+            sparkle.position = SCNVector3(0.01, 0.018, 0.016)
+            lid.addChildNode(oval)
+            lid.addChildNode(sparkle)
+            holder.addChildNode(lid)
             let smiling = SCNNode(geometry: Self.stroked(width: 0.018, depth: 0.016) { p in
                 p.move(to: CGPoint(x: -0.034, y: -0.01))
                 p.addQuadLine(to: CGPoint(x: 0.034, y: -0.01), control: CGPoint(x: 0, y: 0.04))
@@ -304,14 +308,14 @@ final class LinaModel {
             holder.addChildNode(smiling)
             holder.addChildNode(closed)
             head.addChildNode(holder)
-            eyes.append(oval)
+            eyes.append(lid)
             sparkles.append(sparkle)
             smileEyes.append(smiling)
             closedEyes.append(closed)
 
             // Brows: thin raised tubes.
             let browHolder = SCNNode()
-            Self.place(browHolder, x: 0.16 * side, y: 1.80, lift: 0.002)
+            Self.place(browHolder, x: 0.155 * side, y: 1.79, lift: 0.002)
             let brow = SCNNode(geometry: Self.stroked(width: 0.02, depth: 0.018) { p in
                 p.move(to: CGPoint(x: -0.065, y: -0.008))
                 p.addQuadLine(to: CGPoint(x: 0.065, y: -0.008), control: CGPoint(x: 0, y: 0.03))
@@ -323,11 +327,11 @@ final class LinaModel {
         }
 
         let nose = Self.ellipsoid(SCNVector3(0.036, 0.048, 0.062), Self.skin)
-        Self.place(nose, x: 0, y: 1.565, lift: -0.008)
+        Self.place(nose, x: 0, y: 1.545, lift: -0.008)
         head.addChildNode(nose)
 
         let mouthHolder = SCNNode()
-        Self.place(mouthHolder, x: 0, y: 1.43, lift: 0.0)
+        Self.place(mouthHolder, x: 0, y: 1.39, lift: 0.0)
         mouthHolder.addChildNode(mouth)
         let toothBox = SCNBox(width: 0.026, height: 0.03, length: 0.014, chamferRadius: 0.008)
         toothBox.firstMaterial = Self.white
@@ -339,42 +343,47 @@ final class LinaModel {
     }
 
     private func buildHair(on head: SCNNode) {
-        let crown = Self.ellipsoid(SCNVector3(0.44, 0.33, 0.40), hairMaterial)
-        crown.position = SCNVector3(0, 1.95, -0.06)
+        // The crown sits back, so her forehead shows under the part.
+        let crown = Self.ellipsoid(SCNVector3(0.43, 0.31, 0.37), hairMaterial)
+        crown.position = SCNVector3(0, 2.0, -0.13)
         head.addChildNode(crown)
 
         for side: CGFloat in [-1, 1] {
-            // Bangs sweep from the middle part out to each side.
-            let bang = Self.ellipsoid(SCNVector3(0.25, 0.15, 0.21), hairMaterial)
-            bang.position = SCNVector3(0.2 * side, 1.97, 0.12)
-            bang.eulerAngles.z = -0.45 * side
-            head.addChildNode(bang)
+            // From the middle part the hair sweeps out and down to each side, high at the part, low at the temple.
+            let sweep = Self.ellipsoid(SCNVector3(0.25, 0.12, 0.19), hairMaterial)
+            sweep.position = SCNVector3(0.23 * side, 2.0, 0.07)
+            sweep.eulerAngles.z = -0.62 * side
+            head.addChildNode(sweep)
 
-            let temple = Self.ellipsoid(SCNVector3(0.12, 0.17, 0.15), hairMaterial)
-            temple.position = SCNVector3(0.36 * side, 1.86, 0.03)
+            let temple = Self.ellipsoid(SCNVector3(0.11, 0.2, 0.15), hairMaterial)
+            temple.position = SCNVector3(0.37 * side, 1.83, -0.02)
             head.addChildNode(temple)
         }
 
         // The back: a row of fat vertical locks, like a bunch of bananas, falling to her shoulders.
         for degrees: CGFloat in [-100, -66, -33, 0, 33, 66, 100] {
             let a = degrees * .pi / 180
-            let lock = SCNNode(geometry: SCNCapsule(capRadius: 0.155, height: 1.12))
+            let x = 0.37 * sin(a), z = -0.21 - 0.22 * cos(a)
+            let lock = SCNNode(geometry: SCNCapsule(capRadius: 0.15, height: 1.1))
             lock.geometry?.firstMaterial = hairMaterial
-            lock.position = SCNVector3(0.36 * sin(a), 1.40, -0.20 - 0.22 * cos(a))
-            lock.scale = SCNVector3(1.05, 1, 1)
+            lock.position = SCNVector3(x, 1.42, z)
             head.addChildNode(lock)
+            // Each lock ends in a rounder bulb, like the reference's bunch-of-bananas back.
+            let end = Self.ellipsoid(SCNVector3(0.175, 0.2, 0.17), hairMaterial)
+            end.position = SCNVector3(x * 1.06, 1.0, z)
+            head.addChildNode(end)
         }
 
         // A headband over the top, behind the bangs.
-        let band = SCNNode(geometry: Self.arcBand(from: 18, to: 162, inner: 0.93, depth: 0.07))
+        let band = SCNNode(geometry: Self.arcBand(from: 16, to: 164, inner: 0.92, depth: 0.07))
         band.geometry?.firstMaterial = bandMaterial
-        band.position = SCNVector3(0, 1.68, 0.06)
+        band.position = SCNVector3(0, 1.72, -0.02)
         band.scale = SCNVector3(0.47, 0.6, 1)
         head.addChildNode(band)
 
         // Tiny hands poking out of her hair, three on each side.
         for side: CGFloat in [-1, 1] {
-            for (y, out, depth) in [(1.58, 0.50, -0.17), (1.30, 0.52, -0.20), (1.02, 0.49, -0.18)] as [(CGFloat, CGFloat, CGFloat)] {
+            for (y, out, depth) in [(1.60, 0.51, -0.18), (1.30, 0.54, -0.21), (1.03, 0.56, -0.19)] as [(CGFloat, CGFloat, CGFloat)] {
                 let hand = Self.tinyHand()
                 hand.position = SCNVector3(out * side, y, depth)
                 if side < 0 { hand.eulerAngles.y = .pi }
@@ -387,20 +396,20 @@ final class LinaModel {
     /// A small hand reaching out along +x from its wrist, which is the node's origin.
     private static func tinyHand() -> SCNNode {
         let hand = SCNNode()
-        let arm = SCNNode(geometry: SCNCapsule(capRadius: 0.014, height: 0.07))
+        let arm = SCNNode(geometry: SCNCapsule(capRadius: 0.019, height: 0.08))
         arm.geometry?.firstMaterial = handSkin
         arm.eulerAngles.z = .pi / 2
         hand.addChildNode(arm)
-        let palm = ellipsoid(SCNVector3(0.03, 0.032, 0.014), handSkin)
-        palm.position = SCNVector3(0.045, 0, 0)
+        let palm = ellipsoid(SCNVector3(0.038, 0.04, 0.02), handSkin)
+        palm.position = SCNVector3(0.055, 0, 0)
         hand.addChildNode(palm)
-        for degrees: CGFloat in [-48, -18, 10, 38, 80] {
+        for degrees: CGFloat in [-46, -16, 12, 40, 82] {
             let a = degrees * .pi / 180
-            let length: CGFloat = degrees == 80 ? 0.028 : 0.04
-            let finger = SCNNode(geometry: SCNCapsule(capRadius: 0.0085, height: length))
+            let length: CGFloat = degrees == 82 ? 0.034 : 0.048
+            let finger = SCNNode(geometry: SCNCapsule(capRadius: 0.012, height: length))
             finger.geometry?.firstMaterial = handSkin
-            let reach: CGFloat = 0.028 + length / 2
-            finger.position = SCNVector3(0.045 + reach * cos(a), reach * sin(a), 0)
+            let reach: CGFloat = 0.034 + length / 2 - 0.006
+            finger.position = SCNVector3(0.055 + reach * cos(a), reach * sin(a), 0)
             finger.eulerAngles.z = a - .pi / 2
             hand.addChildNode(finger)
         }
@@ -413,7 +422,7 @@ final class LinaModel {
         let ambient = SCNNode()
         ambient.light = SCNLight()
         ambient.light?.type = .ambient
-        ambient.light?.intensity = 380
+        ambient.light?.intensity = 200
         ambient.light?.color = NSColor(srgbRed: 0.88, green: 0.87, blue: 1.0, alpha: 1)
         scene.rootNode.addChildNode(ambient)
 
@@ -421,7 +430,7 @@ final class LinaModel {
         let key = SCNNode()
         key.light = SCNLight()
         key.light?.type = .directional
-        key.light?.intensity = 1150
+        key.light?.intensity = 850
         key.light?.color = NSColor(srgbRed: 1.0, green: 0.96, blue: 0.92, alpha: 1)
         key.eulerAngles = SCNVector3(-0.55, -0.52, 0)
         scene.rootNode.addChildNode(key)
@@ -430,7 +439,7 @@ final class LinaModel {
         let rim = SCNNode()
         rim.light = SCNLight()
         rim.light?.type = .directional
-        rim.light?.intensity = 900
+        rim.light?.intensity = 750
         rim.light?.color = NSColor(srgbRed: 0.76, green: 0.74, blue: 1.0, alpha: 1)
         rim.eulerAngles = SCNVector3(-0.4, .pi - 0.55, 0)
         scene.rootNode.addChildNode(rim)
@@ -438,7 +447,7 @@ final class LinaModel {
         let fill = SCNNode()
         fill.light = SCNLight()
         fill.light?.type = .directional
-        fill.light?.intensity = 360
+        fill.light?.intensity = 220
         fill.eulerAngles = SCNVector3(0.1, 0.7, 0)
         scene.rootNode.addChildNode(fill)
     }
@@ -469,9 +478,9 @@ final class LinaModel {
         return m
     }
 
-    /// Lina's hair in a mood: the mood color, a little lighter, as the reference renders' violet is.
+    /// Lina's hair in a mood. When she's ready it's the reference renders' violet; other moods use their color.
     static func hairColor(_ mood: Mood) -> NSColor {
-        mood.nsHair.blended(withFraction: 0.14, of: .white) ?? mood.nsHair
+        mood == .idle ? NSColor(srgbRed: 0.42, green: 0.35, blue: 0.84, alpha: 1) : mood.nsHair
     }
 
     private static func ellipsoid(_ radii: SCNVector3, _ material: SCNMaterial) -> SCNNode {
