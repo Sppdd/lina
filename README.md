@@ -17,6 +17,8 @@
 </p>
 
 <p align="center">
+  <a href="https://sppdd.github.io/lina/"><strong>Website</strong></a> ·
+  <a href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip"><strong>Download for Mac</strong></a> ·
   <a href="#install">Install</a> ·
   <a href="#what-lina-does">Commands</a> ·
   <a href="#how-it-works">How it works</a> ·
@@ -52,6 +54,10 @@ Under the hood: **NVIDIA Nemotron on Nebius Token Factory** for checks and comma
 | `/lina model` ↩ | Every writing and image model available; switch with ⌘1–⌘9. |
 | `/lina image a reading nook at dusk` ↩ | A picture; ⌘1 puts it where the command was. |
 | `/lina saved` / `/lina help` ↩ | Opens Saved / lists the commands. |
+| `/lina remember my sister is Noor` ↩ | Keeps a note on your Mac and uses it in every answer. `/lina remember this` keeps the paragraph above; `⌃⌥ M` keeps whatever you've highlighted. |
+| `/lina gathered` ↩ | Writes the next lines from the quotes you copied and the screenshots you took (read on your Mac). Turn on **Settings → Memory → Keep what I copy and screenshot** first. |
+| `/lina bug it put the answer in the wrong place` ↩ | A problem report about this exact moment: your setup, the field and what Lina decided, never your text. Also in the menu: **Report a Problem…** |
+| Hold `⌃⌥` and talk | Say a command ("who won the 2022 World Cup", "rewrite this warmer"). Lina types it in as `/lina …` and runs it. Speech is recognized on your Mac. |
 | `⌥ Space` | Types `/lina ` for you, ready for what you want. |
 
 A pause after `,` `.` or `!` also runs a command, so you can keep the rhythm of a sentence. Commands that only talk to Lina (`/lina`, `model`, `help`, `saved`) take themselves out of your text as they run. Fields Lina can't read (some web search boxes) still work: she follows your keystrokes and puts the answer where the command was.
@@ -60,9 +66,13 @@ The first time you use each part, a small tip appears under your own text with a
 
 **Lina's window** (click the menu bar face → Open Lina) has animated demos of six use cases, everything she has saved (searches with sources, questions, rewrites, pictures), and the models behind her. The full design is in [docs/REDESIGN.md](docs/REDESIGN.md).
 
+**Optional, off by default:** *Ask me a question when I pause* (Settings → General) makes Lina ask her one question after a longer pause, without being asked. *Look things up on Wikipedia* (Settings → Search) answers searches from Wikipedia with links when there's no Gemini key; only the question is sent.
+
 ## Install
 
-**Requirements:** macOS 14+, Apple Silicon, Xcode 16+ command line tools.
+**Quickest:** download [Lina.zip](https://github.com/Sppdd/lina/releases/latest/download/Lina.zip), unzip it and drag **Lina.app** into Applications. Lina isn't notarized yet, so the first time macOS blocks it, open **System Settings → Privacy & Security** and click **Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Lina.app`). Then paste a free [Nebius Token Factory](https://tokenfactory.nebius.com) key when onboarding asks; a [Gemini key](https://aistudio.google.com/apikey) adds live web answers.
+
+**From source.** Requirements: macOS 14+, Apple Silicon, Xcode 16+ command line tools.
 
 ```sh
 git clone https://github.com/Sppdd/lina.git && cd lina
@@ -78,7 +88,7 @@ On first launch, onboarding walks you through:
    GEMINI_API_KEY=…    # aistudio.google.com/apikey: live web answers (optional)
    ```
    This is the developer setup. In the released app, people sign up instead and the keys stay on Lina's server; see [docs/PRODUCTION.md](docs/PRODUCTION.md).
-   To keep commands on your Mac, choose **On this Mac** and run `ollama serve` with `ollama pull llama3.2`.
+   To keep commands on your Mac, choose **On this Mac** and start Ollama: Lina recommends a model for your Mac's memory and downloads it for you (Settings → Models).
 3. **A practice page.** Lina opens one in TextEdit with things to try.
 
 > `scripts/build-app.sh` signs Lina with a requirement pinned to its bundle ID, so the Accessibility permission survives rebuilds. If Lina still says access is missing, click **Grant Access** in the menu bar or in Settings.
@@ -133,6 +143,8 @@ Sources/Lina
 
 - Lina reads only when you type `/lina` or finish a sentence, never password fields or secure input, and you can pause her per app.
 - What's sent: the finished sentence for checks; the paragraph for commands; the question and nearby words to Gemini for search; only the description for pictures. Settings → Privacy spells it out.
+- Memory (`~/Library/Application Support/Lina/memory.json`) stays on your Mac. Gathered clippings are off until you turn them on, live only in memory, skip password managers and are forgotten when Lina quits.
+- Problem reports are written only when you ask (`/lina bug` or **Report a Problem…**). They hold app names, lengths, settings and Lina's decisions, never your text, and are saved to `~/Library/Logs/Lina/reports`. Sending them to the Lina team can be switched off in Settings → General.
 - No telemetry or analytics. Signed in, requests go through Lina's server (`supabase/functions/lina-ai`), which holds the provider keys and keeps only daily counts, never your text. Development keys are kept in a file only your user can read. Saved items are a JSON file on your Mac.
 
 ## Develop

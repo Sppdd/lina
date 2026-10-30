@@ -2,7 +2,7 @@
 
 Target length: **2:45** (the limit is 3:00). Record at 1920×1080 or larger, then upload to YouTube as **Public**.
 
-The story in one line: *Lina helps you write the things that matter, in the apps you already use, and you stay the author.*
+The story in one line: *Lina lives at your cursor in every app and speaks only when you ask, and nothing goes into your text until you press ⌘1.*
 
 ---
 
@@ -11,27 +11,28 @@ The story in one line: *Lina helps you write the things that matter, in the apps
 **Mac**
 
 - [ ] Turn on Do Not Disturb, hide the Dock (`⌥⌘D`), and use a plain wallpaper.
-- [ ] Quit Slack, Mail notifications and anything else that might pop up.
-- [ ] Make the system text larger so the ink is readable on a phone: **System Settings → Accessibility → Display → Text size**, or zoom Notes to 125%.
-- [ ] Use light appearance. The ink reads best on white.
+- [ ] Quit anything that might send a notification.
+- [ ] Zoom Notes and Mail to 125% so the cards and chips are readable on a phone.
+- [ ] Use light appearance.
 
-**Lina** (menu bar → Settings)
+**Lina** (click her face in the menu bar → Settings)
 
-- [ ] **Model:** Nebius Token Factory, with the key pasted. Click **Test Connection** and look for "Connected".
-- [ ] **General:** Companion on, ink drop on, hold ⌃⌥ to talk on, ghost text off.
-- [ ] **Mode:** Understand (press `⇧⌥ Space` until the drop says *Understand*).
-- [ ] **Memory:** turn on **Keep what I copy and screenshot**, and save one memory: highlight *"My sister's name is Noor. She's getting married in June."* and press `⌃⌥ M`.
-- [ ] **Privacy:** turn on **Look it up on Wikipedia**.
-- [ ] **Model → On this Mac** (only for the 2:10 shot): check that Ollama is running and that a model you haven't downloaded is listed, so the Download button shows.
+- [ ] **Models:** Nebius Token Factory with your key. Commands should be `nvidia/nemotron-3-super-120b-a12b` and checks `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`. Click **Test Connection**.
+- [ ] **Search:** paste a Gemini key and click **Test Search**. If Gemini is rate-limited, turn on **Look things up on Wikipedia** as a backup.
+- [ ] **General:** Lina on, check each sentence on, delay about 1.2 s, hold ⌃⌥ to talk on, *Ask me a question when I pause* off.
+- [ ] **Memory:** turn on **Keep what I copy and screenshot**. Save one memory: in any app, type `/lina remember my sister's name is Noor and she's getting married in June` and press Return.
+- [ ] Open Lina's window once and click through the tips so none appear on camera (or leave one for the "first time" shot).
+- [ ] Grant microphone and speech access by holding ⌃⌥ once before recording.
 
-**Windows ready in this order** (Mission Control or separate Spaces)
+**Windows ready, in this order**
 
-1. Notes, with a new note called *Letter to Dad*
-2. Mail, with a reply draft to *Sam* about Thursday
+1. Notes, with a new note called *Match report*
+2. Mail, with a reply to *Sam*
 3. Safari, open at <https://en.wikipedia.org/wiki/Apollo_11>
-4. Pages or TextEdit, with a document called *Grandpa's summer*
+4. Notes, with a note called *Grandpa's summer*
+5. Lina's window, on **What she's good at**
 
-**Do a full dry run once.** Nemotron's wording changes from run to run, so if a reflection lands flat, record that part again.
+**Do one full dry run.** Model wording changes between runs, so if an answer lands flat, record that part again.
 
 ---
 
@@ -39,128 +40,125 @@ The story in one line: *Lina helps you write the things that matter, in the apps
 
 Voiceover is in quotes. On-screen actions are in brackets.
 
-### 0:00–0:15 · The hook
+### 0:00–0:12 · The hook
 
-[Empty note titled *Letter to Dad*. The ink drop breathes above the cursor.]
+[Lina's window, *Meet Lina*: her face cycling through moods.]
 
-> "Most AI writing tools write for you. Lina writes *with* you. It's a writing companion that lives above your cursor, in any app on your Mac."
+> "Most AI writing tools interrupt you. Lina waits until you ask. She lives at your cursor, in every app on your Mac."
 
-### 0:15–0:55 · Understand: thinking it through
+### 0:12–0:45 · Ask the web mid-sentence
 
-[Type, at a natural speed, then stop:]
+[Notes, *Match report*. Type: `The 2022 World Cup final ended /lina who won and how` and press Return.]
 
-> I've started this letter four times. I keep wanting to tell you about the new job, but what I actually think about is the garage, and you teaching me to solder when I was nine.
+> "I type /lina and my question right where the fact belongs. Lina marks it as hers. She runs NVIDIA Nemotron on Nebius Token Factory, with Google search for live facts."
 
-[Pause. The drop swirls and the ink card appears: HEARING… ASK…]
+[The card appears under the line with the answer and sources. Press `⌘1`.]
 
-> "When I pause, Lina reads the whole letter. It's running NVIDIA Nemotron 3 Super on Nebius Token Factory. It tells me what it hears, and asks one question."
+> "Nothing goes into my text until I press Command-1. Then the answer takes the question's place, worded to fit my sentence."
 
-[The drop flies to *the garage* and underlines it.]
+### 0:45–1:05 · Catching typos
 
-> "And it points at the thread worth following."
+[On a new line, type: `Thank you for you're help, I realy apreciate it.` and stop.]
 
-[Hold `⌃⌥` and say: *"That you can fix almost anything if you're patient with it."* Let go. Lina answers in ink.]
+> "When I finish a sentence and pause, she checks it. The right word sits right above each mistake."
 
-> "I can answer out loud. And notice: it hasn't typed a single word into my letter."
+[Chips appear. Press `⌘A`.]
 
-### 0:55–1:20 · Edit: the hard email
+> "Command-A takes them all."
 
-[Switch to Mail. Press `⇧⌥ Space` once. The drop says *Edit*.]
+### 1:05–1:30 · A question, and a rewrite
 
-> "Edit mode is for the email you've been rewording for ten minutes."
+[Mail, reply to Sam. Type: `I think I should take the new offer, even though I love my team.` then `/lina` and Return.]
 
-[Type: *I just wanted to maybe say that I don't think I can really make it Thursday, sorry.* Then pause for about a second.]
+> "On its own, /lina reads what I wrote and asks one question, the kind a good friend would ask."
 
-[Lina offers a rewrite in ink. Press `⇥`.]
+[The question card appears. Read it. Press `esc`.]
 
-> "Finish a sentence, and Lina offers a clearer one. Tab takes it. Escape keeps mine."
+[Type on a new line: `send me the report now` then ` /lina rewrite polite` and Return. Three options appear. Press `⌘2`.]
 
-### 1:20–1:45 · `/lina` anywhere, and memory
+> "Or three rewrites in the tone I want. I pick one with a number."
 
-[Press `⇧⌥ Space` twice to go back to *Understand*. On a new line in the same draft, type:]
+### 1:30–1:50 · Talk to her, and she remembers
 
-> /lina write two warm lines congratulating my sister on her wedding
+[Still in Mail, on a new line. Hold `⌃⌥` and say: *"write two warm lines congratulating my sister on her wedding"*. Let go.]
 
-[Press `↩`.]
+> "I can just say it. Hold Control-Option and talk."
 
-> "I can type a command right where I'm writing. Lina already knows my sister is Noor, because I asked it to remember."
+[The command types itself in and runs. The choices card names Noor. Press `⌘1`.]
 
-[Optional, if time allows: `/lina turn this into a photo` on a short description, which pastes a FLUX image.]
+> "And she knows my sister is Noor, because I asked her to remember."
 
-### 1:45–2:10 · Research: writing from what I gathered
+### 1:50–2:15 · Writing from research
 
-[Safari, Apollo 11 page. Select and copy *Apollo 11 … landed on July 20, 1969*. Then press `⌃⇧⌘4` and screenshot the infobox.]
+[Safari, Apollo 11 page. Copy the sentence about the landing date. Press `⌃⇧⌘4` and screenshot the infobox.]
 
-> "When I'm researching, Lina keeps what I copy, and reads my screenshots on my Mac."
+> "While I research, Lina keeps what I copy and reads my screenshots, on my Mac."
 
-[Switch to *Grandpa's summer*. Type: *The summer my grandfather turned twelve,* then press `⌥ Space` and choose **Use what I gathered**.]
+[Notes, *Grandpa's summer*. Type: `The summer my grandfather turned twelve,` then `/lina gathered` and Return. Press `⌘1`.]
 
-> "Then it writes from my real research instead of guessing."
+> "Then /lina gathered writes from my real research instead of guessing."
 
-[Press `⌥ Space` again, type *How many people watched the Moon landing?* and choose **Look it up**. The answer appears with a Wikipedia link. Press `⌘↩` to insert it with the citation.]
+### 2:15–2:30 · A picture
 
-> "Facts come with a source."
+[New line: `/lina image a boy watching the moon landing on a small TV, 1969` and Return. The picture appears. Press `⌘1`.]
 
-### 2:10–2:30 · Private by design
-
-[Open Settings → Model. Switch to **On this Mac**. Click **Download** next to the recommended model and let the progress bar run for a second.]
-
-> "Prefer nothing leaves your Mac? Switch to a local model, and Lina downloads the right one for your Mac. It never reads password fields, there's no account and no analytics, and it's open source."
+> "She can draw too, with FLUX on the same Token Factory key."
 
 ### 2:30–2:45 · Close
 
-[Browser: <https://sppdd.github.io/lina/>, scroll from the hero to the Download button.]
+[Browser: <https://sppdd.github.io/lina/>, scroll to the Download button.]
 
-> "Lina. Write with someone beside you. Free and open source, at sppdd.github.io/lina."
+> "Lina. She speaks only when you ask. Free and open source at sppdd.github.io/lina."
 
 ---
 
-## Sample text (copy and paste if typing on camera is hard)
+## Text to type (or paste most of, then type the end)
 
-For the companion shots, paste everything except the last few words and type those on camera. It looks natural, and Lina starts its pause timer from your last keystroke.
-
-**Letter to Dad**
+Lina reacts to what you type, so paste the start if you like, but type the `/lina …` part and the Return on camera.
 
 ```
-I've started this letter four times. I keep wanting to tell you about the new job, but what I actually think about is the garage, and you teaching me to solder when I was nine.
+The 2022 World Cup final ended /lina who won and how
 ```
 
-**Mail to Sam (Edit mode)**
-
 ```
-I just wanted to maybe say that I don't think I can really make it Thursday, sorry.
+Thank you for you're help, I realy apreciate it.
 ```
 
-**Memory to save first**
-
 ```
-My sister's name is Noor. She's getting married in June.
+I think I should take the new offer, even though I love my team. /lina
 ```
 
-**Grandpa's summer**
+```
+send me the report now /lina rewrite polite
+```
 
 ```
-The summer my grandfather turned twelve,
+The summer my grandfather turned twelve, /lina gathered
+```
+
+```
+/lina image a boy watching the moon landing on a small TV, 1969
 ```
 
 ---
 
 ## Recording tips
 
-- **Tooling:** QuickTime (`⇧⌘5` → Record Selected Portion) is enough. Screen Studio or Cleanshot add automatic zoom on the cursor, which helps a lot because the ink is small.
-- **Record each section as its own clip** and cut them together. One take of the whole thing is hard to get right.
-- **Zoom in** on the ink card in editing (150–200%). Judges will often watch on a laptop or phone.
-- **Voiceover after.** Record the screen first, then read the script over it. It's easier to time.
-- **Captions:** upload the script as YouTube subtitles. Many people watch with the sound off.
-- **Thumbnail:** the ink card over the letter, with the words "Write with someone beside you".
+- **Tooling:** QuickTime (`⇧⌘5` → Record Selected Portion) is enough. Screen Studio or CleanShot add automatic cursor zoom, which helps because cards and chips are small.
+- **Record each section as its own clip** and cut them together.
+- **Zoom in** on cards and chips while editing (150–200%).
+- **Voiceover after.** Record the screen first, then read the script over it.
+- **Captions:** upload the script as YouTube subtitles.
+- **Thumbnail:** Lina's face next to the answer card, with the words "Speaks only when you ask".
 
 ## If something goes wrong on camera
 
 | Problem | Fix |
 |---|---|
-| No ink drop | Menu bar → **Grant Access** for Accessibility, then click back into Notes. |
-| Card never appears | Check Settings → Model → **Test Connection**. Pause a little longer (default is 2.5 s). |
-| Reflection is off | Press `esc`, type a few more words and pause again. Or record that part again. |
-| Edit mode offers nothing | End the sentence with `.`, `?` or `!` and pause for about a second. Lina only rewrites a sentence you finished in the last 10 seconds. |
-| Use what I gathered is grey | Gathering only starts after you turn it on. Copy the quote again. |
-| Look it up has no link | Web lookup is off in Privacy, or the question was too vague. Try *Apollo 11 television audience*. |
+| The command isn't tinted | Lina needs Accessibility: click her face → **Grant Access**, then click back into the field. |
+| "Lina isn't connected yet" | Add the Nebius key in Settings → Models and click **Test Connection**. |
+| Search says it's busy | Gemini is rate-limited. Wait a minute, or turn on Wikipedia in Settings → Search. |
+| No chips after a sentence | End it with `.` `?` or `!` and stop typing for the delay you set. Each sentence is checked once. |
+| Talking does nothing | Hold ⌃⌥ alone for half a second before speaking. Check microphone access in System Settings. |
+| `/lina gathered` says nothing's gathered | Gathering starts when you turn it on. Copy the quote again. |
+| Anything else | Type `/lina bug` and a few words, and the report lands in `~/Library/Logs/Lina/reports`. |
