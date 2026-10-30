@@ -251,13 +251,19 @@ final class LinaModel {
     private static let faceRadii = SCNVector3(0.385, 0.55, 0.36)
 
     private func buildBody() {
-        let body = Self.ellipsoid(SCNVector3(0.66, 0.46, 0.33), Self.shirt)
-        body.position = SCNVector3(0, 0.30, -0.06)
+        let body = Self.ellipsoid(SCNVector3(0.70, 0.52, 0.33), Self.shirt)
+        body.position = SCNVector3(0, 0.20, -0.06)
         root.addChildNode(body)
+        // Shoulders, so the sweater reads as a sweater and not a dome.
+        for side: CGFloat in [-1, 1] {
+            let shoulder = Self.ellipsoid(SCNVector3(0.30, 0.18, 0.28), Self.shirt)
+            shoulder.position = SCNVector3(0.38 * side, 0.55, -0.06)
+            root.addChildNode(shoulder)
+        }
 
         let collar = SCNNode(geometry: SCNTorus(ringRadius: 0.13, pipeRadius: 0.052))
         collar.geometry?.firstMaterial = Self.collar
-        collar.position = SCNVector3(0, 0.80, -0.05)
+        collar.position = SCNVector3(0, 0.76, -0.05)
         collar.scale = SCNVector3(1.12, 1, 0.95)
         root.addChildNode(collar)
 
@@ -279,9 +285,9 @@ final class LinaModel {
         let face = Self.ellipsoid(Self.faceRadii, Self.skin)
         face.position = Self.faceCenter
         head.addChildNode(face)
-        // A fuller lower face and a rounder, wider chin, as in the references.
-        let jaw = Self.ellipsoid(SCNVector3(0.35, 0.29, 0.32), Self.skin)
-        jaw.position = SCNVector3(0, 1.31, -0.01)
+        // A slightly fuller lower face and rounder chin. Kept almost inside the face so it blends without a crease.
+        let jaw = Self.ellipsoid(SCNVector3(0.31, 0.27, 0.31), Self.skin)
+        jaw.position = SCNVector3(0, 1.33, -0.01)
         head.addChildNode(jaw)
 
         for side: CGFloat in [-1, 1] {
@@ -361,9 +367,9 @@ final class LinaModel {
 
         for side: CGFloat in [-1, 1] {
             // From the middle part the hair sweeps out and down to each side, high at the part, low at the temple.
-            let sweep = Self.ellipsoid(SCNVector3(0.31, 0.15, 0.22), hairMaterial)
-            sweep.position = SCNVector3(0.255 * side, 1.98, 0.09)
-            sweep.eulerAngles.z = -0.62 * side
+            let sweep = Self.ellipsoid(SCNVector3(0.30, 0.12, 0.2), hairMaterial)
+            sweep.position = SCNVector3(0.255 * side, 2.03, 0.05)
+            sweep.eulerAngles.z = -0.7 * side
             head.addChildNode(sweep)
 
             let temple = Self.ellipsoid(SCNVector3(0.13, 0.22, 0.17), hairMaterial)
@@ -385,6 +391,15 @@ final class LinaModel {
             head.addChildNode(end)
         }
 
+        // The middle part: a darker line between the two sweeps, from the hairline back over the crown.
+        let part = SCNNode(geometry: Self.stroked(width: 0.022, depth: 0.024) { p in
+            p.move(to: CGPoint(x: 0.21, y: 2.13))
+            p.addQuadLine(to: CGPoint(x: -0.18, y: 2.33), control: CGPoint(x: 0.1, y: 2.34))
+        })
+        part.geometry?.firstMaterial = bandMaterial
+        part.eulerAngles.y = -.pi / 2  // the path's x runs front to back
+        head.addChildNode(part)
+
         // A headband over the top, behind the bangs.
         let band = SCNNode(geometry: Self.arcBand(from: 12, to: 168, inner: 0.92, depth: 0.12))
         band.geometry?.firstMaterial = bandMaterial
@@ -395,10 +410,10 @@ final class LinaModel {
         // Tiny hands poking out of her hair at uneven heights and angles, three on each side.
         // (height, out, depth, turn forward or back, tilt up or down, size)
         let right: [(CGFloat, CGFloat, CGFloat, CGFloat, CGFloat, CGFloat)] = [
-            (1.66, 0.49, -0.12, 0.45, 0.35, 0.9), (1.38, 0.52, -0.30, -0.35, 0.0, 1.05), (1.06, 0.55, -0.15, 0.25, -0.4, 1.0),
+            (1.66, 0.45, -0.12, 0.45, 0.35, 0.9), (1.38, 0.47, -0.30, -0.35, 0.0, 1.05), (1.06, 0.50, -0.15, 0.25, -0.4, 1.0),
         ]
         let left: [(CGFloat, CGFloat, CGFloat, CGFloat, CGFloat, CGFloat)] = [
-            (1.52, 0.51, -0.20, 0.3, 0.15, 1.0), (1.24, 0.53, -0.10, 0.5, -0.2, 0.9), (0.96, 0.55, -0.28, -0.3, -0.45, 1.05),
+            (1.52, 0.46, -0.20, 0.3, 0.15, 1.0), (1.24, 0.48, -0.10, 0.5, -0.2, 0.9), (0.96, 0.50, -0.28, -0.3, -0.45, 1.05),
         ]
         for (side, spots) in [(CGFloat(1), right), (CGFloat(-1), left)] {
             for (y, out, depth, turn, tilt, size) in spots {
