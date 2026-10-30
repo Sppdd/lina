@@ -17,6 +17,8 @@
 </p>
 
 <p align="center">
+  <a href="https://sppdd.github.io/lina/"><strong>Website</strong></a> ·
+  <a href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip"><strong>Download for Mac</strong></a> ·
   <a href="#install">Install</a> ·
   <a href="#what-lina-does">Features</a> ·
   <a href="#how-it-works">How it works</a> ·
@@ -76,7 +78,9 @@ New to Lina? **[How to use Lina](docs/USAGE.md)** walks through every feature wi
 
 ## Install
 
-**Requirements:** macOS 14+, Apple Silicon, Xcode 16+ command line tools.
+**Quickest:** download [Lina.zip](https://github.com/Sppdd/lina/releases/latest/download/Lina.zip), unzip it and drag **Lina.app** into Applications. Lina isn't notarized yet, so the first time macOS blocks it, open **System Settings → Privacy & Security** and click **Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Lina.app`).
+
+**From source.** Requirements: macOS 14+, Apple Silicon, Xcode 16+ command line tools.
 
 ```sh
 git clone https://github.com/Sppdd/lina.git && cd lina
