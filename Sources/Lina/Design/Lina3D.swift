@@ -30,6 +30,7 @@ final class LinaModel {
     private let mouth = SCNNode()
     private let tooth = SCNNode()
     private var hands: [SCNNode] = []
+    private var handTilts: [CGFloat] = []
 
     private var current: (mood: Mood, head: Bool, animated: Bool)?
 
@@ -46,6 +47,11 @@ final class LinaModel {
 
     // MARK: Posing
 
+    /// Hides the details that turn to noise at icon sizes (her tiny hands).
+    var simplified = false {
+        didSet { hands.forEach { $0.isHidden = simplified } }
+    }
+
     /// Shows a mood. Animated, she moves, blinks and her hands wiggle; otherwise she holds still for a picture.
     func pose(_ mood: Mood, head: Bool, animated: Bool) {
         if let current, current.mood == mood, current.head == head, current.animated == animated { return }
@@ -61,9 +67,9 @@ final class LinaModel {
         root.removeAllActions()
         headPivot.removeAllActions()
         eyes.forEach { $0.removeAllActions() }
-        hands.forEach {
-            $0.removeAllActions()
-            $0.eulerAngles.z = 0
+        for (hand, tilt) in zip(hands, handTilts) {
+            hand.removeAllActions()
+            hand.eulerAngles.z = tilt
         }
         if animated {
             startMotion(mood)
@@ -77,7 +83,7 @@ final class LinaModel {
 
     private func frame(head: Bool) {
         let target = head ? SCNVector3(0, 1.64, 0) : SCNVector3(0, 1.30, 0)
-        camera.position = head ? SCNVector3(0, 1.70, 4.4) : SCNVector3(0, 1.40, 7.0)
+        camera.position = head ? SCNVector3(0, 1.70, 4.6) : SCNVector3(0, 1.40, 7.0)
         camera.look(at: target)
     }
 
@@ -118,10 +124,11 @@ final class LinaModel {
         let toothAt: CGFloat? = switch e.mouth {
         case .smile: -0.04
         case .soft: -0.028
+        case .grin: -0.012
         default: nil
         }
         tooth.isHidden = toothAt == nil
-        tooth.position = SCNVector3(0.04, toothAt ?? 0, 0.006)
+        tooth.position = SCNVector3(0.04, toothAt ?? 0, 0.014)
     }
 
     private func startMotion(_ mood: Mood) {
@@ -229,7 +236,7 @@ final class LinaModel {
 
     // MARK: Building her
 
-    private static let skin = material(NSColor(srgbRed: 0.94, green: 0.75, blue: 0.66, alpha: 1), rough: 0.45, coat: 0.15)
+    private static let skin = material(NSColor(srgbRed: 0.94, green: 0.75, blue: 0.66, alpha: 1), rough: 0.58)
     private static let cheek = material(NSColor(srgbRed: 0.94, green: 0.52, blue: 0.57, alpha: 1), rough: 0.18, coat: 0.9)
     private static let eye = material(NSColor(srgbRed: 0.16, green: 0.08, blue: 0.10, alpha: 1), rough: 0.12, coat: 1)
     private static let line = material(NSColor(srgbRed: 0.30, green: 0.14, blue: 0.17, alpha: 1), rough: 0.35, coat: 0.3)
@@ -244,8 +251,8 @@ final class LinaModel {
     private static let faceRadii = SCNVector3(0.385, 0.55, 0.36)
 
     private func buildBody() {
-        let body = Self.ellipsoid(SCNVector3(0.58, 0.5, 0.34), Self.shirt)
-        body.position = SCNVector3(0, 0.28, -0.06)
+        let body = Self.ellipsoid(SCNVector3(0.66, 0.46, 0.33), Self.shirt)
+        body.position = SCNVector3(0, 0.30, -0.06)
         root.addChildNode(body)
 
         let collar = SCNNode(geometry: SCNTorus(ringRadius: 0.13, pipeRadius: 0.052))
@@ -272,6 +279,10 @@ final class LinaModel {
         let face = Self.ellipsoid(Self.faceRadii, Self.skin)
         face.position = Self.faceCenter
         head.addChildNode(face)
+        // A fuller lower face and a rounder, wider chin, as in the references.
+        let jaw = Self.ellipsoid(SCNVector3(0.35, 0.29, 0.32), Self.skin)
+        jaw.position = SCNVector3(0, 1.31, -0.01)
+        head.addChildNode(jaw)
 
         for side: CGFloat in [-1, 1] {
             let ear = Self.ellipsoid(SCNVector3(0.06, 0.1, 0.075), Self.skin)
@@ -344,51 +355,61 @@ final class LinaModel {
 
     private func buildHair(on head: SCNNode) {
         // The crown sits back, so her forehead shows under the part.
-        let crown = Self.ellipsoid(SCNVector3(0.43, 0.31, 0.37), hairMaterial)
+        let crown = Self.ellipsoid(SCNVector3(0.46, 0.33, 0.39), hairMaterial)
         crown.position = SCNVector3(0, 2.0, -0.13)
         head.addChildNode(crown)
 
         for side: CGFloat in [-1, 1] {
             // From the middle part the hair sweeps out and down to each side, high at the part, low at the temple.
-            let sweep = Self.ellipsoid(SCNVector3(0.25, 0.12, 0.19), hairMaterial)
-            sweep.position = SCNVector3(0.23 * side, 2.0, 0.07)
+            let sweep = Self.ellipsoid(SCNVector3(0.31, 0.15, 0.22), hairMaterial)
+            sweep.position = SCNVector3(0.255 * side, 1.98, 0.09)
             sweep.eulerAngles.z = -0.62 * side
             head.addChildNode(sweep)
 
-            let temple = Self.ellipsoid(SCNVector3(0.11, 0.2, 0.15), hairMaterial)
-            temple.position = SCNVector3(0.37 * side, 1.83, -0.02)
+            let temple = Self.ellipsoid(SCNVector3(0.13, 0.22, 0.17), hairMaterial)
+            temple.position = SCNVector3(0.39 * side, 1.82, -0.03)
             head.addChildNode(temple)
         }
 
         // The back: a row of fat vertical locks, like a bunch of bananas, falling to her shoulders.
         for degrees: CGFloat in [-100, -66, -33, 0, 33, 66, 100] {
             let a = degrees * .pi / 180
-            let x = 0.37 * sin(a), z = -0.21 - 0.22 * cos(a)
-            let lock = SCNNode(geometry: SCNCapsule(capRadius: 0.15, height: 1.1))
+            let x = 0.39 * sin(a), z = -0.21 - 0.22 * cos(a)
+            let lock = SCNNode(geometry: SCNCapsule(capRadius: 0.16, height: 1.2))
             lock.geometry?.firstMaterial = hairMaterial
-            lock.position = SCNVector3(x, 1.42, z)
+            lock.position = SCNVector3(x, 1.38, z)
             head.addChildNode(lock)
             // Each lock ends in a rounder bulb, like the reference's bunch-of-bananas back.
-            let end = Self.ellipsoid(SCNVector3(0.175, 0.2, 0.17), hairMaterial)
-            end.position = SCNVector3(x * 1.06, 1.0, z)
+            let end = Self.ellipsoid(SCNVector3(0.185, 0.21, 0.175), hairMaterial)
+            end.position = SCNVector3(x * 1.06, 0.9, z)
             head.addChildNode(end)
         }
 
         // A headband over the top, behind the bangs.
-        let band = SCNNode(geometry: Self.arcBand(from: 16, to: 164, inner: 0.92, depth: 0.07))
+        let band = SCNNode(geometry: Self.arcBand(from: 12, to: 168, inner: 0.92, depth: 0.12))
         band.geometry?.firstMaterial = bandMaterial
-        band.position = SCNVector3(0, 1.72, -0.02)
-        band.scale = SCNVector3(0.47, 0.6, 1)
+        band.position = SCNVector3(0, 1.72, -0.05)
+        band.scale = SCNVector3(0.5, 0.67, 1)
         head.addChildNode(band)
 
-        // Tiny hands poking out of her hair, three on each side.
-        for side: CGFloat in [-1, 1] {
-            for (y, out, depth) in [(1.60, 0.51, -0.18), (1.30, 0.54, -0.21), (1.03, 0.56, -0.19)] as [(CGFloat, CGFloat, CGFloat)] {
+        // Tiny hands poking out of her hair at uneven heights and angles, three on each side.
+        // (height, out, depth, turn forward or back, tilt up or down, size)
+        let right: [(CGFloat, CGFloat, CGFloat, CGFloat, CGFloat, CGFloat)] = [
+            (1.66, 0.49, -0.12, 0.45, 0.35, 0.9), (1.38, 0.52, -0.30, -0.35, 0.0, 1.05), (1.06, 0.55, -0.15, 0.25, -0.4, 1.0),
+        ]
+        let left: [(CGFloat, CGFloat, CGFloat, CGFloat, CGFloat, CGFloat)] = [
+            (1.52, 0.51, -0.20, 0.3, 0.15, 1.0), (1.24, 0.53, -0.10, 0.5, -0.2, 0.9), (0.96, 0.55, -0.28, -0.3, -0.45, 1.05),
+        ]
+        for (side, spots) in [(CGFloat(1), right), (CGFloat(-1), left)] {
+            for (y, out, depth, turn, tilt, size) in spots {
                 let hand = Self.tinyHand()
                 hand.position = SCNVector3(out * side, y, depth)
-                if side < 0 { hand.eulerAngles.y = .pi }
+                // Hands reach out along +x; the left side is turned around to reach out along -x.
+                hand.eulerAngles = SCNVector3(0, side > 0 ? -turn : .pi + turn, tilt)
+                hand.scale = SCNVector3(size, size, size)
                 head.addChildNode(hand)
                 hands.append(hand)
+                handTilts.append(tilt)
             }
         }
     }
@@ -655,6 +676,7 @@ enum LinaRender {
         let key = "\(mood.rawValue)-\(Int(points))-\(head)"
         if let hit = cache[key] { return hit }
         guard let renderer else { return nil }
+        model.simplified = points < 30
         model.pose(mood, head: head, animated: false)
         let aspect = head ? LinaModel.headAspect : 1
         let pixels = CGSize(width: (points * 2 * aspect).rounded(), height: (points * 2).rounded())
