@@ -585,7 +585,7 @@ final class LinaEngine: ObservableObject {
         tips.hide()
         let anchor = ctx.anchor
         let needsModel: Bool = switch kind {
-        case .help, .saved: false
+        case .help, .saved, .remember, .bug: false
         case .search: !settings.hasSearch
         default: true
         }
@@ -643,11 +643,11 @@ final class LinaEngine: ObservableObject {
             commandLeft = ctx.remove
             if case let .rewrite(how) = kind {
                 choices(title: how.isEmpty ? "Rewrites" : "Rewrites · \(how)", passage: passage,
-                        messages: Prompts.rewrite(passage, how: how, voice: settings.voice, aboutMe: settings.aboutMe),
+                        messages: Prompts.rewrite(passage, how: how, voice: settings.voice, aboutMe: settings.writerNotes),
                         spot: Writer.spot(whole, in: snap), kind: .rewrite, app: ctx.app, prompt: "rewrite \(how)", anchor: anchor)
             } else if case let .edit(instruction) = kind {
                 choices(title: "Edit · \(instruction)", passage: passage,
-                        messages: Prompts.edit(passage, instruction: instruction, voice: settings.voice, aboutMe: settings.aboutMe),
+                        messages: Prompts.edit(passage, instruction: instruction, voice: settings.voice, aboutMe: settings.writerNotes),
                         spot: Writer.spot(whole, in: snap), kind: .edit, app: ctx.app, prompt: instruction, anchor: anchor)
             }
         case let .image(prompt):
@@ -665,6 +665,31 @@ final class LinaEngine: ObservableObject {
             }
             commandLeft = ctx.remove
             image(prompt: prompt, spot: ctx.whole, app: ctx.app, anchor: anchor)
+        case let .remember(note):
+            Writer.replace(ctx.remove, with: "")
+            finishInline()
+            remember(note: note, ctx: ctx)
+        case let .bug(note):
+            Writer.replace(ctx.remove, with: "")
+            finishInline()
+            report(note: note, anchor: anchor)
+        case let .gathered(how):
+            let clippings = Clippings.shared.promptText
+            guard !clippings.isEmpty else {
+                Writer.replace(ctx.remove, with: "")
+                finishInline()
+                notice(settings.gatherClippings
+                       ? "Nothing gathered yet. Copy a quote or take a screenshot, then ask again."
+                       : "Turn on “Keep what I copy and screenshot” in Settings → Memory first.", .idle, at: anchor)
+                return
+            }
+            let before = (snap.map { $0.text.substring(to: ctx.start) } ?? ctx.before)
+            commandLeft = ctx.remove
+            choices(title: how.isEmpty ? "From what you gathered" : "From what you gathered · \(how)",
+                    passage: "\(Clippings.shared.items.count) clippings",
+                    messages: Prompts.gathered(before: before, clippings: clippings, how: how,
+                                               voice: settings.voice, aboutMe: settings.writerNotes),
+                    spot: ctx.whole, kind: .edit, app: ctx.app, prompt: "gathered \(how)", anchor: anchor)
         case let .search(question):
             commandLeft = ctx.remove
             search(question, before: ctx.before, after: ctx.after, spot: ctx.answer, suffix: ctx.suffix,
@@ -739,7 +764,7 @@ final class LinaEngine: ObservableObject {
 
     private func question(about text: String, app: String, anchor: CGRect) {
         let client = LLMClient(endpoint: settings.commandEndpoint)
-        let messages = Prompts.question(text: text, appName: app, voice: settings.voice, aboutMe: settings.aboutMe)
+        let messages = Prompts.question(text: text, appName: app, voice: settings.voice, aboutMe: settings.writerNotes)
         let gen = begin("Reading what you wrote…", anchor: anchor)
         task = Task { [weak self] in
             do {
@@ -782,10 +807,12 @@ final class LinaEngine: ObservableObject {
     private func search(_ question: String, before: String, after: String, spot: Writer.Spot, suffix: String,
                         app: String, anchor: CGRect) {
         let grounded = settings.hasSearch
+        let wikipedia = !grounded && settings.webLookup
         let gemini = settings.gemini
         let client = LLMClient(endpoint: settings.commandEndpoint)
-        let voice = settings.voice, aboutMe = settings.aboutMe
-        let gen = begin(grounded ? "Searching the web…" : "Thinking it over…", anchor: anchor)
+        let voice = settings.voice, aboutMe = settings.writerNotes
+        let gen = begin(grounded ? "Searching the web…" : wikipedia ? "Looking it up on Wikipedia…" : "Thinking it over…",
+                        anchor: anchor)
         task = Task { [weak self] in
             do {
                 let raw: String
@@ -799,8 +826,10 @@ final class LinaEngine: ObservableObject {
                     sources = answer.sources
                     suggestions = answer.suggestionsHTML
                 } else {
+                    let pages = wikipedia ? ((try? await WebLookup.search(question)) ?? []) : []
+                    sources = pages.map { WebSource(title: $0.title, url: $0.url.absoluteString) }
                     raw = try await client.complete(Prompts.search(question: question, before: before, after: after,
-                                                                  voice: voice, aboutMe: aboutMe),
+                                                                  voice: voice, aboutMe: aboutMe, pages: pages),
                                                     maxTokens: 220, temperature: 0.3)
                 }
                 guard let self, gen == self.generation else { return }
@@ -815,6 +844,55 @@ final class LinaEngine: ObservableObject {
             } catch {
                 self?.fail(error, gen: gen, anchor: anchor, quiet: false)
             }
+        }
+    }
+
+    /// `/lina remember`: the note typed after it, or the paragraph above when it says "this" or nothing.
+    private func remember(note: String, ctx: CommandContext) {
+        var text = note
+        if ["", "this", "that", "it"].contains(note.lowercased()) {
+            text = ctx.snap.flatMap { snap in
+                CommandParser.target(before: ctx.start, in: snap.text).map { snap.text.substring(with: $0) }
+            } ?? ""
+        }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            notice("Tell me what to remember: /lina remember my sister's name is Noor.", .idle, at: ctx.anchor)
+            return
+        }
+        let title = ctx.snap?.windowTitle ?? ""
+        MemoryStore.shared.add(text, source: title.isEmpty ? ctx.app : "\(ctx.app) · \(title)")
+        Diagnostics.log("memory", "saved \(text.count) chars")
+        notice("Saved to my memory.", .happy, at: ctx.anchor, seconds: 2.4)
+    }
+
+    /// ⌃⌥M: whatever the writer highlighted goes into Lina's memory.
+    func rememberSelection() {
+        guard let snap = AX.snapshot(requireCaret: false), snap.selection.length > 0 else {
+            Diagnostics.log("memory", "⌃⌥M with no readable selection")
+            NSSound.beep()
+            return
+        }
+        let text = snap.text.substring(with: snap.selection)
+        MemoryStore.shared.add(text, source: snap.windowTitle.isEmpty ? snap.appName : "\(snap.appName) · \(snap.windowTitle)")
+        Diagnostics.log("memory", "saved \(text.count) chars")
+        notice("Saved to my memory.", .happy, at: anchor(snap, at: NSMaxRange(snap.selection) - 1), seconds: 2.4)
+    }
+
+    /// `/lina bug`: a report about this exact moment, saved, copied, and sent if the writer allows it.
+    private func report(note: String, anchor: CGRect) {
+        guard let url = Diagnostics.report(note, kind: "/lina bug") else {
+            notice("I couldn't save the report.", .worried, at: anchor)
+            return
+        }
+        guard settings.shareReports else {
+            notice("Report copied. It's in ~/Library/Logs/Lina/reports.", .happy, at: anchor)
+            return
+        }
+        notice("Report copied. Sending it to the Lina team…", .happy, at: anchor)
+        Task { [weak self] in
+            let sent = await Cloud.send(reportAt: url, kind: "/lina bug", note: note)
+            self?.notice(sent ? "Report sent. Thank you." : "Couldn't send it, but it's copied and saved.",
+                         sent ? .happy : .worried, at: anchor)
         }
     }
 

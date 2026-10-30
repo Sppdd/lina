@@ -137,8 +137,28 @@ enum Prompts {
         """
     }
 
-    static func search(question: String, before: String, after: String, voice: VoicePreset, aboutMe: String) -> [ChatMessage] {
-        [.system(searchSystem(voice: voice, aboutMe: aboutMe, grounded: false)),
-         .user(searchUser(question: question, before: before, after: after))]
+    static func search(question: String, before: String, after: String, voice: VoicePreset, aboutMe: String,
+                       pages: [WebLookup.Source] = []) -> [ChatMessage] {
+        var user = searchUser(question: question, before: before, after: after)
+        if !pages.isEmpty {
+            let refs = pages.enumerated().map { "[\($0.offset + 1)] \($0.element.title): \($0.element.extract)" }
+                .joined(separator: "\n")
+            user += "\nAnswer from these Wikipedia summaries only. If they don't answer it, say so briefly.\n<sources>\n\(refs)\n</sources>"
+        }
+        return [.system(searchSystem(voice: voice, aboutMe: aboutMe, grounded: false)), .user(user)]
+    }
+
+    /// `/lina gathered`: the next few sentences, written from what the writer copied and screenshotted.
+    static func gathered(before: String, clippings: String, how: String, voice: VoicePreset, aboutMe: String) -> [ChatMessage] {
+        let sys = persona(voice, aboutMe: aboutMe) + """
+
+        While researching, the writer copied and screenshotted the clippings below (newest first). \
+        Continue their text with the next two or three sentences, drawing on whichever clippings fit. \
+        Quote exactly when you quote, never add facts the clippings don't give, and ignore clippings that \
+        don't belong. Output only the new sentences.
+        """
+        var user = "<clippings>\n\(clippings)\n</clippings>\n<text>\n\(before.suffix(2500))</text>"
+        if !how.isEmpty { user += "\nThe writer adds: \(how)" }
+        return [.system(sys), .user(user)]
     }
 }
