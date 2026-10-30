@@ -51,7 +51,7 @@ enum CardContent: Equatable {
         case .question: "Lina asks"
         case let .corrections(fixes):
             fixes.count == 1 ? "1 mistake" : "\(fixes.count) mistakes"
-        case let .answer(_, _, _, grounded, _): grounded ? "From the web" : "From the model"
+        case let .answer(_, _, sources, grounded, _): grounded ? "From the web" : sources.isEmpty ? "From the model" : "From Wikipedia"
         case let .choices(title, _, _): title
         case .models: "Models"
         case .image: "Your picture"
@@ -154,8 +154,8 @@ struct CardView: View {
                     SearchSuggestionsView(html: suggestions)
                         .frame(height: 46)
                 }
-                if !grounded {
-                    Text("Not checked against the web. Sign in, or add a Gemini key in Settings → Search, for live answers.")
+                if !grounded && sources.isEmpty {
+                    Text("Not checked against the web. Sign in, add a Gemini key, or turn on Wikipedia in Settings → Search.")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

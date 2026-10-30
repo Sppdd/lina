@@ -169,8 +169,7 @@ struct OnboardingView: View {
                         _ = try await client.complete([.system("Reply with one word."), .user("Say: ready")], maxTokens: 8, temperature: 0)
                     }
                 } else {
-                    Text("Start Ollama and run `ollama pull llama3.2`. You can change the server in Settings.")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                    LocalModelsList(compact: true).frame(width: 472)
                 }
                 KeyField(title: "Gemini API key (optional, for web search)",
                          link: ("Get a key at aistudio.google.com", "https://aistudio.google.com/apikey"),

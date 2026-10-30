@@ -29,6 +29,12 @@ struct LinaApp: App {
         .windowResizability(.contentSize)
         .defaultPosition(.center)
 
+        Window("Report a Problem", id: "report") {
+            ReportView()
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
         Settings {
             SettingsView(engine: delegate.engine)
         }
@@ -91,6 +97,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             WindowOpener.shared.open("home")
         }
         HotKeyCenter.shared.handler = { [weak self] in self?.engine.askNow() }
+        HotKeyCenter.shared.memoryHandler = { [weak self] in self?.engine.rememberSelection() }
+        Clippings.shared.setEnabled(AppSettings.shared.gatherClippings)
         HotKeyCenter.shared.register(AppSettings.shared.hotKey)
         engine.start()
         // Accessibility can be granted at any time; pick it up without a relaunch.

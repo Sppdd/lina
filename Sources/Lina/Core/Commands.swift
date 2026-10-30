@@ -22,6 +22,12 @@ struct LinaCommand: Equatable {
         case help
         /// `/lina saved`: open what Lina has saved.
         case saved
+        /// `/lina remember [this | note]`: keep a note about the writer, on this Mac.
+        case remember(String)
+        /// `/lina gathered [how]`: write the next lines from what the writer copied and screenshotted.
+        case gathered(String)
+        /// `/lina bug [what happened]`: a problem report about this exact moment.
+        case bug(String)
         /// Anything else is a question for the web, answered so it fits your sentence.
         case search(String)
     }
@@ -58,6 +64,9 @@ enum CommandParser {
         Help(word: "model", usage: "/lina model", detail: "Lists Token Factory models; switch with ⌘1–⌘9."),
         Help(word: "image", usage: "/lina image <description>", detail: "Makes a picture you can drop into your text."),
         Help(word: "saved", usage: "/lina saved", detail: "Opens everything Lina has saved."),
+        Help(word: "remember", usage: "/lina remember [note]", detail: "Remembers a note, or the paragraph above, for next time."),
+        Help(word: "gathered", usage: "/lina gathered [how]", detail: "Writes on from the quotes and screenshots you gathered."),
+        Help(word: "bug", usage: "/lina bug [what happened]", detail: "Writes a problem report about this moment."),
         Help(word: "help", usage: "/lina help", detail: "Shows this list."),
     ]
 
@@ -120,6 +129,9 @@ enum CommandParser {
         case "image", "imagine", "draw", "picture": return .image(rest)
         case "help", "commands": return rest.isEmpty ? .help : .search(trimmed)
         case "saved", "history": return rest.isEmpty ? .saved : .search(trimmed)
+        case "remember", "memorize": return .remember(rest)
+        case "gathered", "research", "clippings", "clipboard": return .gathered(rest)
+        case "bug", "report": return .bug(rest)
         case "search", "find", "google": return rest.isEmpty ? .help : .search(rest + (terminator == "?" ? "?" : ""))
         default: return .search(trimmed + (terminator == "?" ? "?" : ""))
         }

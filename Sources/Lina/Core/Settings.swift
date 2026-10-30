@@ -64,6 +64,20 @@ final class AppSettings: ObservableObject {
     @Published var showTips: Bool { didSet { d.set(showTips, forKey: "showTips") } }
     /// How long the writer has to stop typing after a sentence before Lina shows its fixes, in seconds.
     @Published var checkDelay: Double { didSet { d.set(checkDelay, forKey: "checkDelay") } }
+    /// Off by default: when the writer stops for a while, Lina asks her one question without being asked.
+    @Published var askOnPause: Bool { didSet { d.set(askOnPause, forKey: "askOnPause") } }
+    /// How long a pause before she asks, in seconds.
+    @Published var askPause: Double { didSet { d.set(askPause, forKey: "askPause") } }
+    /// Hold ⌃⌥ and say a command.
+    @Published var talkEnabled: Bool { didSet { d.set(talkEnabled, forKey: "talkEnabled") } }
+    /// Keep what the writer copies and screenshots (read with on-device OCR) for `/lina gathered`.
+    @Published var gatherClippings: Bool {
+        didSet { d.set(gatherClippings, forKey: "gatherClippings"); Clippings.shared.setEnabled(gatherClippings) }
+    }
+    /// Without Gemini, answer searches from Wikipedia with a source instead of from the model's memory.
+    @Published var webLookup: Bool { didSet { d.set(webLookup, forKey: "webLookup") } }
+    /// Send problem reports to the Lina team as well as saving them on this Mac.
+    @Published var shareReports: Bool { didSet { d.set(shareReports, forKey: "shareReports") } }
     @Published var provider: Provider { didSet { d.set(provider.rawValue, forKey: "provider") } }
     @Published var commandModel: String { didSet { d.set(commandModel, forKey: "commandModel") } }
     @Published var checkModel: String { didSet { d.set(checkModel, forKey: "checkModel") } }
@@ -84,6 +98,12 @@ final class AppSettings: ObservableObject {
             "checkSentences": true,
             "showTips": true,
             "checkDelay": 1.2,
+            "askOnPause": false,
+            "askPause": 6.0,
+            "talkEnabled": true,
+            "gatherClippings": false,
+            "webLookup": false,
+            "shareReports": true,
             "provider": Provider.nebius.rawValue,
             "voice": VoicePreset.journal.rawValue,
             "linaHotKey": LinaHotKey.optionSpace.rawValue,
@@ -93,6 +113,12 @@ final class AppSettings: ObservableObject {
         checkSentences = d.bool(forKey: "checkSentences")
         showTips = d.bool(forKey: "showTips")
         checkDelay = d.double(forKey: "checkDelay")
+        askOnPause = d.bool(forKey: "askOnPause")
+        askPause = d.double(forKey: "askPause")
+        talkEnabled = d.bool(forKey: "talkEnabled")
+        gatherClippings = d.bool(forKey: "gatherClippings")
+        webLookup = d.bool(forKey: "webLookup")
+        shareReports = d.bool(forKey: "shareReports")
         provider = Provider(rawValue: d.string(forKey: "provider") ?? "") ?? .nebius
         // Earlier versions called these the companion and ghost-text models.
         commandModel = d.string(forKey: "commandModel") ?? d.string(forKey: "companionModel") ?? Provider.defaultCommandModel
@@ -118,7 +144,7 @@ final class AppSettings: ObservableObject {
             ?? nebiusNames.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
             ?? DotEnv.first(of: nebiusNames)
             ?? ""
-        let geminiNames = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "LINA_GEMINI_API_KEY"]
+        let geminiNames = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "LINA_GEMINI_API_KEY", "GEMINI-API-KEY"]
         geminiKey = Secrets.get("gemini-api-key")
             ?? geminiNames.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
             ?? DotEnv.first(of: geminiNames)
@@ -153,6 +179,13 @@ final class AppSettings: ObservableObject {
     var gemini: GeminiClient {
         if let cloud { return GeminiClient(apiKey: cloud.accessToken, model: geminiModel, gateway: cloud.gateway) }
         return GeminiClient(apiKey: geminiKey, model: geminiModel)
+    }
+
+    /// What the writer told Lina about themselves, plus what they asked her to remember.
+    var writerNotes: String {
+        let memory = MemoryStore.shared.promptText
+        guard !memory.isEmpty else { return aboutMe }
+        return aboutMe + "\n\nThings they asked you to remember, use them when they matter:\n" + memory
     }
 
     var isModelConfigured: Bool {

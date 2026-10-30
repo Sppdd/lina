@@ -99,6 +99,8 @@ final class KeyMonitor {
     /// Return true to consume the event.
     var onKeyDown: ((CGEvent) -> Bool)?
     var onMouseDown: (() -> Void)?
+    /// Modifier keys pressed or released on their own (for hold-to-talk).
+    var onFlagsChanged: ((CGEventFlags) -> Void)?
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
@@ -117,6 +119,7 @@ final class KeyMonitor {
         let mask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.leftMouseDown.rawValue)
             | (1 << CGEventType.rightMouseDown.rawValue)
+            | (1 << CGEventType.flagsChanged.rawValue)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
@@ -151,6 +154,8 @@ final class KeyMonitor {
             if onKeyDown?(event) == true { return nil }
         case .leftMouseDown, .rightMouseDown:
             onMouseDown?()
+        case .flagsChanged:
+            onFlagsChanged?(event.flags)
         default: break
         }
         return Unmanaged.passUnretained(event)
@@ -172,20 +177,34 @@ extension CGEvent {
 final class HotKeyCenter {
     static let shared = HotKeyCenter()
     var handler: (() -> Void)?
+    /// ⌃⌥M: save the highlighted text to Lina's memory.
+    var memoryHandler: (() -> Void)?
+    static let memoryTitle = "⌃⌥ M"
     private var ref: EventHotKeyRef?
+    private var memoryRef: EventHotKeyRef?
     private var installed = false
 
     func register(_ key: LinaHotKey) {
         if let ref { UnregisterEventHotKey(ref); self.ref = nil }
-        if key == .off { return }
         if !installed {
             var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-            InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-                DispatchQueue.main.async { HotKeyCenter.shared.handler?() }
+            InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+                var hk = EventHotKeyID()
+                GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                                  nil, MemoryLayout<EventHotKeyID>.size, nil, &hk)
+                let id = hk.id
+                DispatchQueue.main.async {
+                    if id == 2 { HotKeyCenter.shared.memoryHandler?() } else { HotKeyCenter.shared.handler?() }
+                }
                 return noErr
             }, 1, &spec, nil, nil)
             installed = true
         }
+        if memoryRef == nil {
+            let hk = EventHotKeyID(signature: OSType(0x4C494E41), id: 2)
+            RegisterEventHotKey(UInt32(kVK_ANSI_M), UInt32(controlKey | optionKey), hk, GetApplicationEventTarget(), 0, &memoryRef)
+        }
+        if key == .off { return }
         let (code, mods): (Int, Int) = switch key {
         case .optionSpace: (kVK_Space, optionKey)
         case .controlSpace: (kVK_Space, controlKey)

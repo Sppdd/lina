@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lina · Speaks only when you ask</title>
+<meta name="description" content="Lina is an open-source writing helper for macOS. Type /lina in any app to ask the web, get a question, rewrite or draw. She fixes typos with chips above each mistake. Runs on NVIDIA Nemotron via Nebius Token Factory.">
+<meta property="og:title" content="Lina · Write with someone beside you">
+<meta property="og:description" content="An open-source writing helper for macOS that lives at your cursor in every app and speaks only when you ask.">
+<meta property="og:image" content="https://sppdd.github.io/lina/screenshots/card-answer.png">
+<link rel="icon" href="icon.png">
+<style>
+:root {
+  --bg: #0b0b0d;
+  --bg-2: #121216;
+  --line: rgba(255,255,255,.08);
+  --line-2: rgba(255,255,255,.14);
+  --text: #f3f2f7;
+  --muted: #8d8b99;
+  --faint: #5d5b68;
+  --ink: #8575f7;
+  --ink-deep: #4b3fcf;
+  --paper: #fdfbf8;
+  --paper-text: #24221f;
+  --paper-muted: #8b857a;
+  --nvidia: #76b900;
+  --serif: "New York", ui-serif, "Iowan Old Style", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.muted { color: var(--muted); }
+
+/* Nav */
+nav { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); background: rgba(11,11,13,.72); border-bottom: 1px solid var(--line); }
+nav .wrap { display: flex; align-items: center; gap: 28px; height: 58px; }
+.brand { display: flex; align-items: center; gap: 9px; font: 600 17px var(--serif); letter-spacing: .2px; }
+.brand img { width: 24px; height: 24px; border-radius: 6px; }
+nav .links { display: flex; gap: 22px; font-size: 13px; color: var(--muted); }
+nav .links a:hover { color: var(--text); }
+nav .spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-weight: 600; font-size: 13.5px; white-space: nowrap; transition: transform .15s, background .15s; }
+.pill:hover { transform: translateY(-1px); }
+.pill.light { background: var(--text); color: #111; }
+.pill.ghost { border: 1px solid var(--line-2); color: var(--text); }
+.pill.ghost:hover { background: rgba(255,255,255,.05); }
+.pill svg { width: 15px; height: 15px; }
+
+/* Hero */
+.hero { padding: 92px 0 40px; }
+h1, h2 { font-weight: 500; letter-spacing: -.02em; margin: 0; }
+h1 { font-size: clamp(38px, 6vw, 64px); line-height: 1.04; }
+h2 { font-size: clamp(28px, 3.6vw, 40px); line-height: 1.12; }
+h1 .dim, h2 .dim { color: var(--faint); }
+.serif { font-family: var(--serif); font-style: italic; font-weight: 400; }
+.hero p.lede { font-size: 19px; color: var(--muted); max-width: 640px; margin: 22px 0 30px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.fine { font-size: 12.5px; color: var(--faint); margin-top: 14px; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+.badge { font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); }
+.badge b { color: var(--nvidia); font-weight: 600; }
+
+/* Stage: a fake Mac window with live writing */
+.stage { margin: 44px 0 0; position: relative; border-radius: 22px; padding: clamp(18px, 4vw, 54px);
+  background: radial-gradient(120% 90% at 50% 0%, rgba(133,117,247,.38), rgba(75,63,207,.12) 45%, transparent 75%), var(--bg-2);
+  border: 1px solid var(--line); overflow: hidden; }
+.win { background: var(--paper); color: var(--paper-text); border-radius: 12px; box-shadow: 0 40px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.3); overflow: hidden; }
+.win.dark { background: #1c1b1a; color: #ecebe8; }
+.bar { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: rgba(0,0,0,.035); border-bottom: 1px solid rgba(0,0,0,.06); font-size: 12px; color: var(--paper-muted); }
+.win.dark .bar { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.06); }
+.bar i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; display: inline-block; }
+.bar i:nth-child(2) { background: #febc2e; } .bar i:nth-child(3) { background: #28c840; }
+.bar span { margin-left: 10px; }
+.page { padding: 34px clamp(20px, 5vw, 64px) 46px; font: 19px/1.75 var(--serif); min-height: 330px; position: relative; }
+#demo { padding-top: 150px; min-height: 400px; }
+.page h3 { font: 600 24px var(--serif); margin: 0 0 14px; }
+.caret { display: inline-block; width: 2px; height: 1.15em; background: var(--paper-text); vertical-align: -3px; margin-left: 1px; animation: blink 1s steps(1) infinite; position: relative; }
+.win.dark .caret { background: #ecebe8; }
+@keyframes blink { 50% { opacity: 0; } }
+.drop { position: absolute; width: 12px; height: 12px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--ink-deep); box-shadow: 0 0 14px rgba(75,63,207,.55); left: 6px; top: -22px; animation: breathe 2.6s ease-in-out infinite; }
+.thinking .drop { animation: swirl .8s linear infinite; }
+@keyframes breathe { 50% { transform: rotate(-45deg) scale(.82); } }
+@keyframes swirl { to { transform: rotate(315deg); } }
+.inkcard { position: absolute; left: 0; top: 0; width: min(400px, calc(100% - 24px)); padding: 14px 16px; border-radius: 14px;
+  background: rgba(255,255,255,.97); color: var(--paper-text); box-shadow: 0 18px 50px rgba(30,20,90,.22), 0 0 0 1px rgba(75,63,207,.16);
+  font: 15px/1.5 var(--serif); opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; pointer-events: none; white-space: normal; text-align: left; }
+.inkcard.show { opacity: 1; transform: none; }
+.inkcard .k { display: block; font: 600 10px var(--sans); letter-spacing: .08em; color: var(--ink-deep); margin-top: 8px; }
+.inkcard .k:first-child { margin-top: 0; }
+.inkcard .ask { font-style: italic; color: var(--ink-deep); }
+.hl { background: linear-gradient(transparent 62%, rgba(133,117,247,.35) 62%); transition: background .3s; }
+.stage .caption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 18px; font-size: 13px; color: var(--muted); }
+kbd { font: 600 11.5px var(--sans); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line-2); background: rgba(255,255,255,.05); color: var(--text); }
+
+/* Sections */
+section { padding: 110px 0 0; }
+.eyebrow { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink); margin-bottom: 14px; font-weight: 600; }
+.tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line-2); border-radius: 999px; margin: 34px 0 22px; }
+.tabs button { all: unset; cursor: pointer; padding: 7px 16px; border-radius: 999px; font-size: 13px; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--text); color: #111; font-weight: 600; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.grid3 > div { background: var(--bg); padding: 26px; }
+.grid3 h4, .card h4 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.grid3 p, .card p { margin: 0; color: var(--muted); font-size: 14px; }
+.keys { margin-top: 16px; display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--faint); align-items: center; }
+
+/* Use cases */
+.cases { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 40px; }
+.case { border: 1px solid var(--line); border-radius: 18px; background: var(--bg-2); overflow: hidden; display: flex; flex-direction: column; }
+.case .shot { padding: 22px; background: radial-gradient(100% 120% at 0% 0%, rgba(133,117,247,.18), transparent 60%); }
+.case .shot .page { font-size: 16px; min-height: 0; padding: 22px 24px 26px; }
+.case .body { padding: 20px 24px 24px; border-top: 1px solid var(--line); }
+.case .body h4 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+.case .body p { margin: 0; color: var(--muted); font-size: 14px; }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: rgba(133,117,247,.16); color: var(--ink); margin-bottom: 10px; }
+.mini-card { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #fff; box-shadow: 0 10px 30px rgba(30,20,90,.14), 0 0 0 1px rgba(75,63,207,.14); font: 14px/1.5 var(--serif); }
+.mini-card .k { display: block; font: 600 9.5px var(--sans); letter-spacing: .08em; color: var(--ink-deep); margin-top: 6px; }
+.mini-card .k:first-child { margin-top: 0; }
+.cmd { font-family: var(--mono); font-size: 13.5px; color: var(--ink-deep); background: rgba(75,63,207,.08); padding: 1px 5px; border-radius: 4px; }
+.strike { text-decoration: line-through; color: var(--paper-muted); }
+.new { background: rgba(133,117,247,.16); border-radius: 3px; }
+.cite { font: 12.5px var(--sans); color: var(--paper-muted); }
+.wave { display: inline-flex; gap: 3px; align-items: center; height: 18px; vertical-align: middle; margin-right: 6px; }
+.wave i { width: 3px; border-radius: 2px; background: var(--ink-deep); animation: wave 1s ease-in-out infinite; }
+.wave i:nth-child(1){height:6px} .wave i:nth-child(2){height:14px;animation-delay:.1s} .wave i:nth-child(3){height:9px;animation-delay:.2s} .wave i:nth-child(4){height:16px;animation-delay:.3s} .wave i:nth-child(5){height:7px;animation-delay:.4s}
+@keyframes wave { 50% { transform: scaleY(.4); } }
+
+/* Screens */
+.screens { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; margin-top: 40px; }
+.screens figure { margin: 0; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--bg-2); }
+.screens img { width: 100%; display: block; }
+.screens figcaption { padding: 14px 18px; font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--line); }
+.screens .stack { display: grid; gap: 18px; }
+
+/* Models */
+.models { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; }
+.card { border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: var(--bg-2); }
+.card code { font: 12px var(--mono); color: var(--nvidia); display: block; margin: 4px 0 12px; word-break: break-all; }
+
+/* Install */
+.steps { counter-reset: s; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 40px; }
+.steps .card::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: rgba(133,117,247,.16); color: var(--ink); font-weight: 700; font-size: 13px; margin-bottom: 14px; }
+pre { margin: 22px 0 0; padding: 18px 20px; border-radius: 14px; background: var(--bg-2); border: 1px solid var(--line); overflow-x: auto; font: 13px/1.7 var(--mono); color: #cfcde0; }
+pre .c { color: var(--faint); }
+
+/* Final */
+.final { text-align: center; padding: 140px 0 120px; }
+.final h2 { font-size: clamp(32px, 4.5vw, 48px); }
+.final p { color: var(--muted); margin: 14px 0 28px; }
+.final .cta { justify-content: center; }
+footer { border-top: 1px solid var(--line); padding: 40px 0 60px; font-size: 13px; color: var(--faint); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between; align-items: flex-start; }
+footer .cols { display: flex; gap: 48px; }
+footer .cols div { display: grid; gap: 8px; }
+footer .cols b { color: var(--muted); font-weight: 600; }
+footer a:hover { color: var(--text); }
+
+@media (max-width: 860px) {
+  nav .links { display: none; }
+  .grid3, .cases, .screens, .models { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: 1fr 1fr; }
+  .hero { padding-top: 60px; }
+}
+@media (max-width: 520px) {
+  .steps { grid-template-columns: 1fr; }
+  nav .pill .long { display: none; }
+  footer .cols { gap: 28px; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Lina 2 hero pieces */
+.cmd2 { color: #3b82c4; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; transition: color .25s; }
+.cmd2.working { color: #8a63e8; }
+.cmd2.waiting { color: #d49a2a; }
+.cmdtag { font: 600 12px var(--sans); margin-left: 6px; color: inherit; }
+.answer { color: var(--ink-deep); background: rgba(133,117,247,.14); border-radius: 3px; }
+.card2 { position: absolute; left: clamp(20px, 5vw, 64px); width: min(430px, calc(100% - 40px)); padding: 14px 16px; border-radius: 16px;
+  background: #fbfaf8; border: 1.5px solid #ecd9ae; box-shadow: 0 18px 50px rgba(30,20,90,.18); font: 15px/1.45 var(--sans); color: var(--paper-text);
+  opacity: 0; transform: translateY(-4px); transition: opacity .3s, transform .3s; pointer-events: none; }
+.card2.show { opacity: 1; transform: none; }
+.card2 .who { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: #7d7a75; margin-bottom: 8px; }
+.card2 .who img { width: 26px; height: 26px; }
+.card2 .q { font-size: 12px; color: #b3afa8; }
+.card2 .a { font: 18px/1.35 var(--serif); color: var(--ink-deep); margin: 4px 0 10px; }
+.card2 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.card2 .chips span { font: 600 11px var(--sans); padding: 3px 9px; border-radius: 999px; background: rgba(75,63,207,.08); }
+.card2 .keys2 { font-size: 12px; color: #8b857a; display: flex; gap: 12px; }
+.card2 .keys2 b { font: 600 10.5px var(--sans); padding: 1px 6px; border: 1px solid #ddd8cf; border-radius: 5px; background: #f1eee8; color: #555; margin-right: 4px; }
+.typo { text-decoration: underline wavy #d45a45; text-underline-offset: 4px; position: relative; }
+.typo.amber { text-decoration-color: #d49a2a; }
+.chip { position: absolute; left: -4px; bottom: 100%; transform: translateY(-4px); white-space: nowrap; font: 600 12.5px var(--sans); color: #fff;
+  background: #d45a45; padding: 3px 9px; border-radius: 999px; opacity: 0; transition: opacity .25s; }
+.chip.amber { background: #d49a2a; }
+.chip i { font-style: normal; opacity: .75; font-size: 10.5px; margin-left: 4px; }
+.fixed .chip { opacity: 0 !important; }
+.showchips .chip { opacity: 1; }
+.fixed .typo { text-decoration: none; }
+.shotgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; }
+.shot2 { border: 1px solid var(--line); border-radius: 18px; background: var(--bg-2); overflow: hidden; display: flex; flex-direction: column; }
+.shot2 .pic { padding: 18px; background: radial-gradient(100% 120% at 0% 0%, rgba(133,117,247,.22), transparent 65%), #17161b; display: grid; place-items: center; min-height: 210px; }
+.shot2 .pic img { width: 100%; max-width: 360px; display: block; border-radius: 12px; }
+.shot2 .body { padding: 18px 20px 22px; border-top: 1px solid var(--line); }
+.shot2 h4 { margin: 0 0 6px; font-size: 15.5px; font-weight: 600; }
+.shot2 p { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+.try { font: 12.5px var(--mono); color: #cfcde0; background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; display: block; }
+.moods { margin-top: 34px; border: 1px solid var(--line); border-radius: 18px; background: #fbfaf8; padding: 22px; }
+.moods img { width: 100%; display: block; }
+@media (max-width: 860px) { .shotgrid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="">Lina</a>
+    <div class="links">
+      <a href="#uses">Use cases</a>
+      <a href="#new">Memory &amp; voice</a>
+      <a href="#models">Nemotron</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/Sppdd/lina">GitHub</a>
+    </div>
+    <div class="spacer"></div>
+    <a class="pill light" href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.6 1.2-.1 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4 1-1.4 1.3-2.7 1.4-2.8-.1 0-2.6-1-2.6-3.9zM13.9 5c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4z"/></svg>
+      <span>Download<span class="long"> for Mac</span></span>
+    </a>
+  </div>
+</nav>
+
+<header class="hero wrap">
+  <h1>Most AI writing tools interrupt you.<br><span class="dim">Lina waits until you ask.</span></h1>
+  <p class="lede">Lina is a free, open-source writing helper for macOS. Type <span class="cmd" style="color:var(--ink);background:rgba(133,117,247,.12)">/lina</span> and what you want, in any field of any app, and press Return. Look something up, get a question that makes you think, rewrite a paragraph or draw a picture. Nothing goes into your text until you press ⌘1.</p>
+  <div class="cta">
+    <a class="pill light" href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>Download for Mac</a>
+    <a class="pill ghost" href="https://github.com/Sppdd/lina">View the source</a>
+  </div>
+  <div class="fine">macOS 14 or later · Apple Silicon · MIT licensed · <a href="#install" style="text-decoration:underline">First-time setup</a></div>
+  <div class="badges">
+    <span class="badge">Runs on <b>NVIDIA Nemotron</b></span>
+    <span class="badge">Served by Nebius Token Factory</span>
+    <span class="badge">Web answers with sources</span>
+    <span class="badge">Or a model on your own Mac</span>
+  </div>
+
+  <div class="stage" aria-label="Lina answering a /lina command typed in Notes, then fixing typos">
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><span>Notes · Match report</span></div>
+      <div class="page" id="demo" style="padding-top:56px;min-height:380px">
+        <div id="line"></div>
+        <div class="card2" id="card2"></div>
+      </div>
+    </div>
+    <div class="caption">
+      <span>Works in Notes, Mail, Slack, Pages, even a browser's search box.</span>
+      <span><kbd>↩</kbd> run &nbsp; <kbd>⌘1</kbd> insert &nbsp; <kbd>esc</kbd> take it back</span>
+    </div>
+  </div>
+</header>
+
+<section id="uses" class="wrap">
+  <div class="eyebrow">Real use cases</div>
+  <h2>Six moments where Lina earns her place. <span class="dim">Try the line under each one in any app.</span></h2>
+  <div class="shotgrid">
+    <article class="shot2"><div class="pic"><img src="screenshots/fix-chips.png" alt="Correction chips: your, really, appreciate, Fix all" loading="lazy"></div>
+      <div class="body"><span class="tag">Everyone</span><h4>Catch typos as you go</h4><p>Finish a sentence and pause. The right word appears right above each mistake. <kbd>⌘1</kbd> fixes one and <kbd>⌘A</kbd> fixes them all. If nothing's wrong, Lina stays quiet.</p><code class="try">Thank you for you're help, I realy apreciate it.</code></div></article>
+    <article class="shot2"><div class="pic"><img src="screenshots/card-answer.png" alt="Answer card: with Argentina beating France on penalties, with sources" loading="lazy"></div>
+      <div class="body"><span class="tag">Students, fact-checkers</span><h4>Ask the web mid-sentence</h4><p>Type your question where the fact belongs. <kbd>⌘1</kbd> swaps the question for an answer worded to fit your sentence, and <kbd>⌘2</kbd> adds the source.</p><code class="try">The 2022 final ended /lina who won and how ↩</code></div></article>
+    <article class="shot2"><div class="pic"><img src="screenshots/card-question.png" alt="Lina asks: What would you miss most about the job you have now?" loading="lazy"></div>
+      <div class="body"><span class="tag">Journaling, hard decisions</span><h4>A question that makes you think</h4><p><span class="cmd" style="color:var(--ink)">/lina</span> on its own reads what you wrote and asks one short question about it: a gap, an unstated reason, the feeling underneath. No praise, no rewriting.</p><code class="try">…I think I should take the offer. /lina ↩</code></div></article>
+    <article class="shot2"><div class="pic"><img src="screenshots/card-rewrite.png" alt="Three polite rewrites to choose from" loading="lazy"></div>
+      <div class="body"><span class="tag">Work email</span><h4>Rewrite it in a tone</h4><p>Three versions of the paragraph above, in the tone you name. Pick one with <kbd>⌘1</kbd>–<kbd>⌘3</kbd>, or <span class="cmd" style="color:var(--ink)">/lina edit make it shorter</span>.</p><code class="try">send me the report now /lina rewrite polite ↩</code></div></article>
+    <article class="shot2"><div class="pic"><img src="screenshots/card-image.png" alt="A picture drawn by FLUX, ready to drop in" loading="lazy"></div>
+      <div class="body"><span class="tag">Slides, stories</span><h4>Make a picture where you are</h4><p>FLUX on Nebius Token Factory draws it, and <kbd>⌘1</kbd> puts it where the command was.</p><code class="try">/lina image a reading nook at dusk ↩</code></div></article>
+    <article class="shot2"><div class="pic"><img src="screenshots/card-models.png" alt="Model list from Token Factory" loading="lazy"></div>
+      <div class="body"><span class="tag">Tinkerers</span><h4>Switch models without leaving the page</h4><p>Every writing and image model on Token Factory, or on your local Ollama server. Switch with <kbd>⌘1</kbd>–<kbd>⌘9</kbd>.</p><code class="try">/lina model nemotron ↩</code></div></article>
+  </div>
+</section>
+
+<section id="new" class="wrap">
+  <div class="eyebrow">She remembers, listens and reads your research</div>
+  <h2>Ask out loud. <span class="dim">Write from what you gathered.</span></h2>
+  <div class="grid3" style="margin-top:40px">
+    <div><h4>Hold ⌃⌥ to talk</h4><p>Say "who won the 2022 World Cup" or "rewrite this warmer" and let go. Lina types it in as a <span class="cmd" style="color:var(--ink)">/lina</span> command and runs it. Speech is recognized on your Mac.</p></div>
+    <div><h4>Memory</h4><p>Highlight anything and press <kbd>⌃⌥ M</kbd>, or type <span class="cmd" style="color:var(--ink)">/lina remember my sister is Noor</span>. Lina uses it every time she answers. It's stored on your Mac, and you can review it in Settings.</p></div>
+    <div><h4>Use what you gathered</h4><p>If you turn it on, Lina keeps the quotes you copy and reads your screenshots on your Mac. Then <span class="cmd" style="color:var(--ink)">/lina gathered</span> writes the next lines from your real research.</p></div>
+    <div><h4>Wikipedia, with links</h4><p>No Gemini key? Turn on Wikipedia and searches are answered from Wikipedia pages in your question's language, with the links. Only the question is sent.</p></div>
+    <div><h4>A question when you pause</h4><p>Off by default. Switch it on, and after a longer pause Lina asks her one question without being asked.</p></div>
+    <div><h4>/lina bug</h4><p>Something odd? Type <span class="cmd" style="color:var(--ink)">/lina bug</span> and a few words right where it happened. Lina writes a report of what she saw, never your text.</p></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="eyebrow">Meet Lina</div>
+  <h2>A character, not a chatbot. <span class="dim">Her hair tells you what she's doing.</span></h2>
+  <div class="moods"><img src="screenshots/moods.png" alt="Lina's seven moods: ready, listening, thinking, found something, done, needs you, paused" loading="lazy"></div>
+  <div class="screens">
+    <figure><img src="screenshots/home-uses.png" alt="Lina's window: What she's good at, with animated demos" loading="lazy"><figcaption>Lina's window plays every use case on a loop and keeps everything she has saved.</figcaption></figure>
+    <div class="stack">
+      <figure><img src="screenshots/inline-command.png" alt="An inline /lina command: run, working, waiting" loading="lazy"><figcaption>A command is marked as hers while you type it: blue to run, violet while she works, amber when an answer waits.</figcaption></figure>
+      <figure><img src="screenshots/card-answer-dark.png" alt="Answer card in dark mode" loading="lazy"><figcaption>Light or dark, cards sit right under your line.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="models" class="wrap">
+  <div class="eyebrow">Nebius × NVIDIA</div>
+  <h2>Open models, <span class="dim">fast enough to keep up with a pause.</span></h2>
+  <div class="models">
+    <div class="card"><h4>Commands</h4><code>nvidia/nemotron-3-super-120b-a12b</code><p>Questions, rewrites, edits and writing from your clippings. Switch it with <span class="cmd" style="color:var(--ink)">/lina model</span>.</p></div>
+    <div class="card"><h4>Sentence checks</h4><code>nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B</code><p>Proofreads each sentence you finish in about a second, returning exact spans so each fix can sit on top of its word.</p></div>
+    <div class="card"><h4>Pictures</h4><code>black-forest-labs/flux-schnell</code><p><span class="cmd" style="color:var(--ink)">/lina image</span> draws with FLUX on the same Token Factory key.</p></div>
+  </div>
+  <p class="muted" style="margin-top:18px;font-size:14px">Live web answers come from Google Gemini with Search grounding, shown with Google's search suggestions, or from Wikipedia. Commands can also run on Ollama or LM Studio on your Mac, and Lina downloads a model for you.</p>
+</section>
+
+<section id="privacy" class="wrap">
+  <div class="eyebrow">Privacy</div>
+  <h2>She reads only when you ask. <span class="dim">Your words stay yours.</span></h2>
+  <div class="grid3" style="margin-top:40px">
+    <div><h4>Only when asked</h4><p>Lina reads when you type <span class="cmd" style="color:var(--ink)">/lina</span>, hold ⌃⌥, or finish a sentence. She never reads password fields or secure input, and you can pause her in any app.</p></div>
+    <div><h4>Nothing goes in by itself</h4><p>Every answer waits in a card until you press ⌘1. Then it takes the command's place, and ⌘Z undoes it.</p></div>
+    <div><h4>On your Mac</h4><p>Memory, saved answers and gathered clippings stay on this Mac. No analytics. Commands can run on a local model.</p></div>
+  </div>
+</section>
+
+<section id="install" class="wrap">
+  <div class="eyebrow">Try it in five minutes</div>
+  <h2>Download, open, <span class="dim">type /lina.</span></h2>
+  <div class="steps">
+    <div class="card"><h4>Download</h4><p><a href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip" style="color:var(--ink)">Lina.zip</a>, unzip it, and drag <b>Lina.app</b> into Applications.</p></div>
+    <div class="card"><h4>Open it once</h4><p>Lina isn't notarized yet. If macOS blocks it, open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>.</p></div>
+    <div class="card"><h4>Allow Accessibility</h4><p>The welcome screen asks for it, so Lina can read the line you're on when you ask.</p></div>
+    <div class="card"><h4>Add a key</h4><p>Paste a free <a href="https://tokenfactory.nebius.com" style="color:var(--ink)">Nebius Token Factory</a> key. A <a href="https://aistudio.google.com/apikey" style="color:var(--ink)">Gemini key</a> adds live web answers. Or pick <b>On this Mac</b>.</p></div>
+  </div>
+  <pre><span class="c"># If macOS still refuses to open it, clear the download flag:</span>
+xattr -dr com.apple.quarantine /Applications/Lina.app
+
+<span class="c"># Or build it from source (Xcode 16 command line tools):</span>
+git clone https://github.com/Sppdd/lina.git && cd lina
+scripts/build-app.sh --open</pre>
+  <p class="muted" style="font-size:14px;margin-top:16px">Then type <span class="cmd" style="color:var(--ink)">/lina help</span> in any app to see every command.</p>
+</section>
+
+<div class="final wrap">
+  <h2>Write in peace. Ask when you need her.</h2>
+  <p>Lina is free and open source.</p>
+  <div class="cta">
+    <a class="pill light" href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>Download for Mac</a>
+    <a class="pill ghost" href="https://github.com/Sppdd/lina">Star on GitHub</a>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a class="brand" href="#"><img src="icon.png" alt="">Lina</a>
+      <p style="margin:10px 0 0">© 2026 Karrar Abudhar · MIT License<br>Built for the Nebius × NVIDIA Global AI Hackathon · Personal AI</p>
+    </div>
+    <div class="cols">
+      <div><b>Lina</b><a href="#uses">Use cases</a><a href="#new">Memory &amp; voice</a><a href="#install">Install</a></div>
+      <div><b>Project</b><a href="https://github.com/Sppdd/lina">Source</a><a href="https://github.com/Sppdd/lina/blob/main/docs/REDESIGN.md">Design notes</a><a href="https://github.com/Sppdd/lina/releases">Releases</a></div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// The hero: a /lina command typed mid-sentence, answered, inserted; then a sentence with typos, fixed.
+(() => {
+  const line = document.getElementById('line');
+  const card = document.getElementById('card2');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wait = ms => new Promise(r => setTimeout(r, reduce ? Math.min(ms, 400) : ms));
+  const face = 'icon.png';
+
+  async function type(el, text) {
+    if (reduce) { el.textContent += text; return; }
+    for (const ch of text) { el.textContent += ch; await wait(28 + Math.random() * 40); }
+  }
+  function placeCard() {
+    const p = line.getBoundingClientRect(), d = document.getElementById('demo').getBoundingClientRect();
+    card.style.top = (p.bottom - d.top + 14) + 'px';
+  }
+
+  async function searchScene() {
+    card.classList.remove('show');
+    line.innerHTML = '<span id="t1"></span><span class="cmd2" id="c"></span><span class="cmdtag" id="tag"></span><span class="caret"></span>';
+    const t1 = document.getElementById('t1'), c = document.getElementById('c'), tag = document.getElementById('tag');
+    await type(t1, 'The 2022 World Cup final ended ');
+    await type(c, '/lina who won and how');
+    tag.textContent = '↩ run · esc'; tag.style.color = '#3b82c4';
+    await wait(900);
+    c.classList.add('working'); tag.textContent = 'working…'; tag.style.color = '#8a63e8';
+    await wait(1400);
+    c.classList.add('waiting'); tag.textContent = '⌘1 · esc'; tag.style.color = '#d49a2a';
+    card.innerHTML = `<div class="who"><img src="${face}" alt="">From the web</div>
+      <div class="q">who won and how</div>
+      <div class="a">with Argentina beating France on penalties after a 3–3 draw</div>
+      <div class="chips"><span>fifa.com</span><span>bbc.com</span></div>
+      <div class="keys2"><span><b>⌘1</b>Insert</span><span><b>⌘2</b>With source</span><span><b>esc</b>Dismiss</span></div>`;
+    placeCard(); card.classList.add('show');
+    await wait(2600);
+    card.classList.remove('show');
+    line.innerHTML = 'The 2022 World Cup final ended <span class="answer">with Argentina beating France on penalties after a 3–3 draw</span>.<span class="caret"></span>';
+    await wait(2600);
+  }
+
+  async function fixScene() {
+    card.classList.remove('show');
+    line.innerHTML = '<span id="t2"></span><span class="caret"></span>';
+    const t2 = document.getElementById('t2');
+    await type(t2, "Thank you for you're help. I realy do apreciate it.");
+    await wait(1100);
+    line.innerHTML = `Thank you for <span class="typo amber" data-fix="your">you're<span class="chip amber">your<i>⌘1</i></span></span> help. I <span class="typo" data-fix="really">realy<span class="chip">really<i>⌘2</i></span></span> do <span class="typo" data-fix="appreciate">apreciate<span class="chip">appreciate<i>⌘3</i></span></span> it.<span class="caret"></span>`;
+    line.classList.add('showchips');
+    await wait(2600);
+    // ⌘A: every fix at once.
+    line.querySelectorAll('.typo').forEach(t => t.replaceWith(Object.assign(document.createElement('span'), { className: 'answer', textContent: t.dataset.fix })));
+    line.classList.remove('showchips');
+    await wait(2600);
+  }
+
+  addEventListener('resize', () => card.classList.contains('show') && placeCard());
+  (async () => { for (;;) { await searchScene(); await fixScene(); } })();
+})();
+</script>
+</body>
+</html>
