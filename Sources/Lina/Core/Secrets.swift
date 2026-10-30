@@ -1,7 +1,8 @@
 import Foundation
 import Security
 
-/// Stores secrets (the API key) in a file only this user can read, in Lina's Application Support folder.
+/// Stores development secrets (API keys) in a file only this user can read, in Lina's Application Support folder.
+/// Release builds sign users in instead and never hold provider keys (docs/PRODUCTION.md).
 ///
 /// Lina used to keep them in the login Keychain, but a Keychain item trusts the exact build that wrote it.
 /// Lina is ad-hoc signed, so every rebuild looked like a stranger to macOS and it asked
@@ -16,8 +17,9 @@ enum Secrets {
     static func get(_ account: String) -> String? {
         if let value = load()[account], !value.isEmpty { return value }
         // One-time move out of the Keychain. This read can prompt once more; after it, never again.
-        guard !UserDefaults.standard.bool(forKey: "migratedSecretsFromKeychain") else { return nil }
-        UserDefaults.standard.set(true, forKey: "migratedSecretsFromKeychain")
+        let flag = "migratedSecretsFromKeychain.\(account)"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return nil }
+        UserDefaults.standard.set(true, forKey: flag)
         guard let value = LegacyKeychain.get(account) else { return nil }
         set(value, for: account)
         return value

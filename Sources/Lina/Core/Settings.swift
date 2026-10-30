@@ -16,8 +16,8 @@ enum Provider: String, CaseIterable, Identifiable, Codable {
 
     var subtitle: String {
         switch self {
-        case .nebius: "NVIDIA Nemotron in the cloud. Fast, no setup."
-        case .local: "Ollama or LM Studio. Nothing leaves your Mac."
+        case .nebius: "NVIDIA Nemotron and FLUX in the cloud. Fast, no setup."
+        case .local: "Ollama or LM Studio. Your text stays on your Mac."
         }
     }
 
@@ -28,244 +28,147 @@ enum Provider: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var defaultModel: String {
-        switch self {
-        case .nebius: "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
-        case .local: "llama3.2"
-        }
-    }
-
-    /// The companion thinks about the whole draft, so it gets the larger Nemotron on Nebius.
-    static let defaultCompanionModel = "nvidia/nemotron-3-super-120b-a12b"
-
-    /// `/lina turn this into a photo` draws with a text-to-image model on the same Token Factory key.
-    static let defaultImageModel = "black-forest-labs/flux-schnell"
+    /// Answers /lina commands: the larger Nemotron.
+    static let defaultCommandModel = "nvidia/nemotron-3-super-120b-a12b"
+    /// Checks each finished sentence: the fast Nemotron.
+    static let defaultCheckModel = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+    static let defaultLocalModel = "llama3.2"
 }
 
-enum SuggestionLength: String, CaseIterable, Identifiable, Codable {
-    case words, phrase, sentence
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .words: "A few words"
-        case .phrase: "A phrase"
-        case .sentence: "A sentence"
-        }
-    }
-    var maxTokens: Int {
-        switch self {
-        case .words: 10
-        case .phrase: 20
-        case .sentence: 40
-        }
-    }
-    var instruction: String {
-        switch self {
-        case .words: "2 to 5 words"
-        case .phrase: "a short phrase of at most 12 words"
-        case .sentence: "at most one sentence"
-        }
-    }
-}
-
-enum PaletteHotKey: String, CaseIterable, Identifiable, Codable {
-    case optionSpace, controlSpace, commandShiftL
+/// A system-wide shortcut that does what `/lina` does: one question about the paragraph you're in.
+enum LinaHotKey: String, CaseIterable, Identifiable, Codable {
+    case optionSpace, controlSpace, commandShiftL, off
     var id: String { rawValue }
     var title: String {
         switch self {
         case .optionSpace: "⌥ Space"
         case .controlSpace: "⌃ Space"
         case .commandShiftL: "⇧⌘ L"
-        }
-    }
-
-    /// The shortcut that cycles Understand → Edit → Auto: the same keys plus ⇧ (or ⌥ for ⇧⌘L).
-    var modeTitle: String {
-        switch self {
-        case .optionSpace: "⇧⌥ Space"
-        case .controlSpace: "⇧⌃ Space"
-        case .commandShiftL: "⌥⇧⌘ L"
+        case .off: "Off"
         }
     }
 }
 
-/// How much Lina does on its own, cycled with ⇧ + the companion shortcut (like Claude Code's modes).
-enum CompanionMode: String, CaseIterable, Identifiable, Codable {
-    /// Reads along and thinks with you. Never touches the draft.
-    case understand
-    /// When you finish a sentence, offers a rewrite of the whole sentence. ⇥ takes it.
-    case edit
-    /// Rewrites each sentence you finish in place. ⌘Z undoes it, like any edit.
-    case auto
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .understand: "Understand"
-        case .edit: "Edit"
-        case .auto: "Auto"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .understand: "text.bubble"
-        case .edit: "pencil.line"
-        case .auto: "wand.and.stars"
-        }
-    }
-
-    var blurb: String {
-        switch self {
-        case .understand: "Reads along and asks questions. Never edits."
-        case .edit: "Offers a rewrite of each sentence you finish. ⇥ takes it."
-        case .auto: "Rewrites each sentence you finish. ⌘Z undoes."
-        }
-    }
-
-    var next: CompanionMode {
-        let all = Self.allCases
-        return all[(all.firstIndex(of: self)! + 1) % all.count]
-    }
-}
-
-/// All user preferences, persisted to UserDefaults. The API key lives in `Secrets`.
+/// All user preferences, persisted to UserDefaults. Development API keys live in `Secrets`.
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
     private let d = UserDefaults.standard
 
     @Published var hasOnboarded: Bool { didSet { d.set(hasOnboarded, forKey: "hasOnboarded") } }
-    /// Inline ghost text at the caret. Off by default: the companion window is Lina's main way of helping.
-    @Published var enabled: Bool { didSet { d.set(enabled, forKey: "enabled") } }
-    /// The popup above the cursor that thinks with the writer about what they're writing and why.
-    @Published var companionEnabled: Bool { didSet { d.set(companionEnabled, forKey: "companionEnabled") } }
-    @Published var companionMode: CompanionMode { didSet { d.set(companionMode.rawValue, forKey: "companionMode") } }
-    /// Lina's ink drop riding beside the text cursor.
-    @Published var inkEnabled: Bool { didSet { d.set(inkEnabled, forKey: "inkEnabled") } }
-    /// Hold ⌃⌥ to talk to Lina.
-    @Published var talkEnabled: Bool { didSet { d.set(talkEnabled, forKey: "talkEnabled") } }
-    /// Read Lina's questions and replies aloud.
-    @Published var speakAloud: Bool { didSet { d.set(speakAloud, forKey: "speakAloud") } }
-    /// Send problem reports to the Lina team as well as saving them on this Mac.
-    @Published var shareReports: Bool { didSet { d.set(shareReports, forKey: "shareReports") } }
-    /// Keep what the writer copies and screenshots (read with on-device OCR) for "Use what I gathered".
-    @Published var gatherClippings: Bool {
-        didSet { d.set(gatherClippings, forKey: "gatherClippings"); Clippings.shared.setEnabled(gatherClippings) }
-    }
-    /// Let "Look it up" search Wikipedia and answer with a source.
-    @Published var webLookup: Bool { didSet { d.set(webLookup, forKey: "webLookup") } }
-    @Published var companionModel: String { didSet { d.set(companionModel, forKey: "companionModel") } }
-    @Published var imageModel: String { didSet { d.set(imageModel, forKey: "imageModel") } }
-    /// How long a pause before the companion reads the draft again.
-    @Published var companionPauseMs: Double { didSet { d.set(companionPauseMs, forKey: "companionPauseMs") } }
+    /// Lina as a whole. Off means she ignores every command and sentence.
+    @Published var enabled: Bool { didSet { d.set(enabled, forKey: "linaEnabled") } }
+    /// Check each sentence for typos and grammar when it ends with . ? or !
+    @Published var checkSentences: Bool { didSet { d.set(checkSentences, forKey: "checkSentences") } }
+    /// Little ^ hints under your text while you learn the commands.
+    @Published var showTips: Bool { didSet { d.set(showTips, forKey: "showTips") } }
+    /// How long the writer has to stop typing after a sentence before Lina shows its fixes, in seconds.
+    @Published var checkDelay: Double { didSet { d.set(checkDelay, forKey: "checkDelay") } }
     @Published var provider: Provider { didSet { d.set(provider.rawValue, forKey: "provider") } }
-    @Published var nebiusModel: String { didSet { d.set(nebiusModel, forKey: "nebiusModel") } }
+    @Published var commandModel: String { didSet { d.set(commandModel, forKey: "commandModel") } }
+    @Published var checkModel: String { didSet { d.set(checkModel, forKey: "checkModel") } }
+    @Published var imageModel: String { didSet { d.set(imageModel, forKey: "imageModel") } }
     @Published var localBaseURL: String { didSet { d.set(localBaseURL, forKey: "localBaseURL") } }
     @Published var localModel: String { didSet { d.set(localModel, forKey: "localModel") } }
-    @Published var debounceMs: Double { didSet { d.set(debounceMs, forKey: "debounceMs") } }
-    @Published var length: SuggestionLength { didSet { d.set(length.rawValue, forKey: "length") } }
+    @Published var geminiModel: String { didSet { d.set(geminiModel, forKey: "geminiModel") } }
     @Published var voice: VoicePreset { didSet { d.set(voice.rawValue, forKey: "voice") } }
     @Published var aboutMe: String { didSet { d.set(aboutMe, forKey: "aboutMe") } }
-    @Published var dailyGoal: Int { didSet { d.set(dailyGoal, forKey: "dailyGoal") } }
-    @Published var hotKey: PaletteHotKey { didSet { d.set(hotKey.rawValue, forKey: "hotKey") } }
+    @Published var hotKey: LinaHotKey { didSet { d.set(hotKey.rawValue, forKey: "linaHotKey") } }
     @Published var disabledApps: Set<String> { didSet { d.set(Array(disabledApps), forKey: "disabledApps") } }
     @Published var apiKey: String { didSet { Secrets.set(apiKey, for: "nebius-api-key") } }
+    @Published var geminiKey: String { didSet { Secrets.set(geminiKey, for: "gemini-api-key") } }
 
     private init() {
-        // Lina moved from autocomplete to a thinking companion: switch ghost text off once for existing installs.
-        if !d.bool(forKey: "migratedToCompanion") {
-            d.set(false, forKey: "enabled")
-            d.set(true, forKey: "migratedToCompanion")
-        }
         d.register(defaults: [
-            "enabled": false,
-            "companionEnabled": true,
-            "inkEnabled": true,
-            "talkEnabled": true,
-            "speakAloud": false,
-            "shareReports": true,
-            "gatherClippings": false,
-            "webLookup": false,
-            "companionPauseMs": 2500.0,
-            "debounceMs": 550.0,
-            "dailyGoal": 500,
+            "linaEnabled": true,
+            "checkSentences": true,
+            "showTips": true,
+            "checkDelay": 1.2,
             "provider": Provider.nebius.rawValue,
-            "length": SuggestionLength.phrase.rawValue,
             "voice": VoicePreset.journal.rawValue,
-            "hotKey": PaletteHotKey.optionSpace.rawValue,
+            "linaHotKey": LinaHotKey.optionSpace.rawValue,
         ])
         hasOnboarded = d.bool(forKey: "hasOnboarded")
-        enabled = d.bool(forKey: "enabled")
-        companionEnabled = d.bool(forKey: "companionEnabled")
-        companionMode = CompanionMode(rawValue: d.string(forKey: "companionMode") ?? "") ?? .understand
-        inkEnabled = d.bool(forKey: "inkEnabled")
-        talkEnabled = d.bool(forKey: "talkEnabled")
-        speakAloud = d.bool(forKey: "speakAloud")
-        shareReports = d.bool(forKey: "shareReports")
-        gatherClippings = d.bool(forKey: "gatherClippings")
-        webLookup = d.bool(forKey: "webLookup")
-        companionModel = d.string(forKey: "companionModel") ?? Provider.defaultCompanionModel
-        imageModel = d.string(forKey: "imageModel") ?? Provider.defaultImageModel
-        companionPauseMs = d.double(forKey: "companionPauseMs")
+        enabled = d.bool(forKey: "linaEnabled")
+        checkSentences = d.bool(forKey: "checkSentences")
+        showTips = d.bool(forKey: "showTips")
+        checkDelay = d.double(forKey: "checkDelay")
         provider = Provider(rawValue: d.string(forKey: "provider") ?? "") ?? .nebius
-        nebiusModel = d.string(forKey: "nebiusModel") ?? Provider.nebius.defaultModel
+        // Earlier versions called these the companion and ghost-text models.
+        commandModel = d.string(forKey: "commandModel") ?? d.string(forKey: "companionModel") ?? Provider.defaultCommandModel
+        checkModel = d.string(forKey: "checkModel") ?? d.string(forKey: "nebiusModel") ?? Provider.defaultCheckModel
+        imageModel = d.string(forKey: "imageModel") ?? ModelCatalog.defaultImageModel
         localBaseURL = d.string(forKey: "localBaseURL") ?? Provider.local.defaultBaseURL
-        localModel = d.string(forKey: "localModel") ?? Provider.local.defaultModel
-        debounceMs = d.double(forKey: "debounceMs")
-        length = SuggestionLength(rawValue: d.string(forKey: "length") ?? "") ?? .phrase
+        localModel = d.string(forKey: "localModel") ?? Provider.defaultLocalModel
+        // Earlier versions defaulted to Gemini 2.5 Flash; move them to the current default.
+        let savedGemini = d.string(forKey: "geminiModel") ?? ""
+        geminiModel = savedGemini.isEmpty || savedGemini == "gemini-2.5-flash" ? GeminiClient.defaultModel : savedGemini
         voice = VoicePreset(rawValue: d.string(forKey: "voice") ?? "") ?? .journal
         aboutMe = d.string(forKey: "aboutMe") ?? ""
-        dailyGoal = d.integer(forKey: "dailyGoal")
-        hotKey = PaletteHotKey(rawValue: d.string(forKey: "hotKey") ?? "") ?? .optionSpace
+        hotKey = LinaHotKey(rawValue: d.string(forKey: "linaHotKey") ?? "") ?? .optionSpace
         disabledApps = Set(d.stringArray(forKey: "disabledApps") ?? [
             "com.1password.1password", "com.agilebits.onepassword7", "com.apple.keychainaccess",
             "com.bitwarden.desktop", "com.apple.Terminal", "com.googlecode.iterm2",
         ])
-        // Saved key first, falling back to the environment and then a project .env for development.
-        let names = ["LINA_NEBIUS_API_KEY", "NEBIUS_API_KEY", "TOKEN-FACTOR-API"]
+        // Development keys: Lina's private secrets file, then the environment, then a project .env.
+        // Release builds won't hold provider keys at all; see docs/PRODUCTION.md.
         let env = ProcessInfo.processInfo.environment
+        let nebiusNames = ["LINA_NEBIUS_API_KEY", "NEBIUS_API_KEY", "TOKEN-FACTOR-API"]
         apiKey = Secrets.get("nebius-api-key")
-            ?? names.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
-            ?? DotEnv.first(of: names)
+            ?? nebiusNames.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
+            ?? DotEnv.first(of: nebiusNames)
+            ?? ""
+        let geminiNames = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "LINA_GEMINI_API_KEY"]
+        geminiKey = Secrets.get("gemini-api-key")
+            ?? geminiNames.lazy.compactMap { env[$0] }.first { !$0.isEmpty }
+            ?? DotEnv.first(of: geminiNames)
             ?? ""
     }
 
-    /// The connection the LLM client should use right now.
-    var endpoint: LLMEndpoint {
-        switch provider {
-        case .nebius:
-            LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: nebiusModel)
-        case .local:
-            LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel)
-        }
+    /// Signed in, everything goes through Lina's server and no provider key is needed on this Mac.
+    /// Signed out, developer keys (`.env` or Settings) are used directly.
+    private var cloud: Account? { Account.shared.isSignedIn ? Account.shared : nil }
+    var isSignedIn: Bool { cloud != nil }
+
+    private func nebius(_ model: String, task: String) -> LLMEndpoint {
+        cloud?.endpoint(model: model, task: task)
+            ?? LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: model)
     }
 
-    /// The connection the companion window uses: Nemotron Super on Nebius, or the same local model.
-    var companionEndpoint: LLMEndpoint {
-        switch provider {
-        case .nebius:
-            LLMEndpoint(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: companionModel)
-        case .local:
-            LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel)
-        }
+    private var local: LLMEndpoint { LLMEndpoint(baseURL: localBaseURL, apiKey: "local", model: localModel) }
+
+    /// The model that answers /lina commands.
+    var commandEndpoint: LLMEndpoint {
+        provider == .local ? local : nebius(commandModel, task: "command")
     }
 
-    /// Pictures always come from Token Factory, even when the words come from a local model.
-    var imageClient: ImageClient {
-        ImageClient(baseURL: Provider.nebius.defaultBaseURL, apiKey: apiKey, model: imageModel)
+    /// The fast model that checks finished sentences.
+    var checkEndpoint: LLMEndpoint {
+        provider == .local ? local : nebius(checkModel, task: "check")
     }
 
-    /// What the writer told Lina about themselves, plus what they asked it to remember.
-    var writerNotes: String {
-        let memory = MemoryStore.shared.promptText
-        guard !memory.isEmpty else { return aboutMe }
-        return aboutMe + "\n\nThings they asked you to remember, use them when they matter:\n" + memory
+    /// Images and the model list always come from Token Factory.
+    var nebiusEndpoint: LLMEndpoint { nebius(commandModel, task: "image") }
+
+    var gemini: GeminiClient {
+        if let cloud { return GeminiClient(apiKey: cloud.accessToken, model: geminiModel, gateway: cloud.gateway) }
+        return GeminiClient(apiKey: geminiKey, model: geminiModel)
     }
 
     var isModelConfigured: Bool {
-        provider == .local || !apiKey.trimmingCharacters(in: .whitespaces).isEmpty
+        provider == .local || hasNebiusKey || isSignedIn
+    }
+
+    var hasNebiusKey: Bool { !apiKey.trimmingCharacters(in: .whitespaces).isEmpty }
+    var hasGeminiKey: Bool { !geminiKey.trimmingCharacters(in: .whitespaces).isEmpty }
+    var hasSearch: Bool { hasGeminiKey || isSignedIn }
+    /// `/lina image` needs Token Factory, whichever provider writes.
+    var canMakePictures: Bool { hasNebiusKey || isSignedIn }
+
+    /// The model `/lina model` changes, for the current provider.
+    var activeTextModel: String {
+        get { provider == .local ? localModel : commandModel }
+        set { if provider == .local { localModel = newValue } else { commandModel = newValue } }
     }
 
     var launchAtLogin: Bool {

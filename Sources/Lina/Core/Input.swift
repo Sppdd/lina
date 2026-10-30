@@ -24,6 +24,36 @@ enum TextInserter {
 
     /// Pastes text via the clipboard (atomic, keeps formatting simple), then restores the clipboard.
     static func paste(_ text: String) {
+        pasteRestoring { pb in pb.setString(text, forType: .string) }
+    }
+
+    /// Pastes a picture, for `/lina image`, then restores the clipboard.
+    static func pasteImage(_ png: Data) {
+        pasteRestoring { pb in
+            pb.setData(png, forType: .png)
+            if let tiff = NSImage(data: png)?.tiffRepresentation { pb.setData(tiff, forType: .tiff) }
+        }
+    }
+
+    /// Deletes whatever is selected in the app in front.
+    static func deleteSelection() {
+        post(keyCode: CGKeyCode(kVK_Delete), unicode: nil, source: CGEventSource(stateID: .privateState))
+    }
+
+    /// Presses Delete `count` times, to take back characters the writer just typed (the "/lin" of "/lina").
+    static func backspace(_ count: Int) {
+        let src = CGEventSource(stateID: .privateState)
+        for _ in 0..<max(0, count) { post(keyCode: CGKeyCode(kVK_Delete), unicode: nil, source: src) }
+    }
+
+    static func copyImage(_ png: Data) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setData(png, forType: .png)
+        if let tiff = NSImage(data: png)?.tiffRepresentation { pb.setData(tiff, forType: .tiff) }
+    }
+
+    private static func pasteRestoring(_ fill: (NSPasteboard) -> Void) {
         let pb = NSPasteboard.general
         let saved: [NSPasteboardItem] = (pb.pasteboardItems ?? []).map { item in
             let copy = NSPasteboardItem()
@@ -31,42 +61,20 @@ enum TextInserter {
             return copy
         }
         pb.clearContents()
-        pb.setString(text, forType: .string)
+        fill(pb)
         // Tell clipboard managers this is transient.
         pb.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
 
-        pressCommandV()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            pb.clearContents()
-            if !saved.isEmpty { pb.writeObjects(saved) }
-        }
-    }
-
-    /// Pastes a picture. Apps that can't take images get `fallback` text instead (a link to the file).
-    static func paste(image png: Data, fallback: String) {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        let item = NSPasteboardItem()
-        item.setData(png, forType: .png)
-        if let tiff = NSImage(data: png)?.tiffRepresentation { item.setData(tiff, forType: .tiff) }
-        item.setString(fallback, forType: .string)
-        pb.writeObjects([item])
-        // The picture stays on the clipboard on purpose: the writer may want to paste it again.
-        pressCommandV()
-    }
-
-    /// Deletes the current selection, like pressing ⌫.
-    static func deleteSelection() {
-        post(keyCode: CGKeyCode(kVK_Delete), unicode: nil, source: CGEventSource(stateID: .privateState))
-    }
-
-    private static func pressCommandV() {
         let src = CGEventSource(stateID: .privateState)
         for down in [true, false] {
             let e = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: down)
             e?.flags = .maskCommand
             e?.setIntegerValueField(.eventSourceUserData, value: linaEventMarker)
             e?.post(tap: .cghidEventTap)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            pb.clearContents()
+            if !saved.isEmpty { pb.writeObjects(saved) }
         }
     }
 
@@ -86,13 +94,11 @@ enum TextInserter {
     }
 }
 
-/// Global keyboard/mouse observer. Can swallow Tab and Esc — but only while a suggestion is showing.
+/// Global keyboard/mouse observer. Swallows keys only while a Lina card is waiting for a choice.
 final class KeyMonitor {
     /// Return true to consume the event.
     var onKeyDown: ((CGEvent) -> Bool)?
     var onMouseDown: (() -> Void)?
-    /// Modifier keys pressed or released on their own (for hold-to-talk).
-    var onFlagsChanged: ((CGEventFlags) -> Void)?
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
@@ -111,7 +117,6 @@ final class KeyMonitor {
         let mask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.leftMouseDown.rawValue)
             | (1 << CGEventType.rightMouseDown.rawValue)
-            | (1 << CGEventType.flagsChanged.rawValue)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
@@ -146,8 +151,6 @@ final class KeyMonitor {
             if onKeyDown?(event) == true { return nil }
         case .leftMouseDown, .rightMouseDown:
             onMouseDown?()
-        case .flagsChanged:
-            onFlagsChanged?(event.flags)
         default: break
         }
         return Unmanaged.passUnretained(event)
@@ -165,45 +168,20 @@ extension CGEvent {
     var keyCode: Int { Int(getIntegerValueField(.keyboardEventKeycode)) }
 }
 
-/// System-wide hotkeys through Carbon — need no extra permission.
+/// System-wide hotkey through Carbon — needs no extra permission.
 final class HotKeyCenter {
     static let shared = HotKeyCenter()
-    /// Shows or hides the companion.
     var handler: (() -> Void)?
-    /// Cycles the companion's mode (Understand → Edit → Auto).
-    var modeHandler: (() -> Void)?
-    /// ⌃⌥M: save the highlighted text to Lina's memory.
-    var memoryHandler: (() -> Void)?
-    static let memoryTitle = "⌃⌥ M"
-    private var refs: [EventHotKeyRef] = []
-    private var combos: [(code: Int, mods: Int)] = []
+    private var ref: EventHotKeyRef?
     private var installed = false
 
-    /// Whether a key event is one of Lina's own shortcuts, which isn't writing.
-    func matches(_ event: CGEvent) -> Bool {
-        let f = event.flags
-        let mods = (f.contains(.maskCommand) ? cmdKey : 0) | (f.contains(.maskShift) ? shiftKey : 0)
-            | (f.contains(.maskAlternate) ? optionKey : 0) | (f.contains(.maskControl) ? controlKey : 0)
-        return combos.contains { $0.code == event.keyCode && $0.mods == mods }
-    }
-
-    func register(_ key: PaletteHotKey) {
-        refs.forEach { UnregisterEventHotKey($0) }
-        refs.removeAll()
+    func register(_ key: LinaHotKey) {
+        if let ref { UnregisterEventHotKey(ref); self.ref = nil }
+        if key == .off { return }
         if !installed {
             var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-            InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
-                var hk = EventHotKeyID()
-                GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
-                                  nil, MemoryLayout<EventHotKeyID>.size, nil, &hk)
-                let id = hk.id
-                DispatchQueue.main.async {
-                    switch id {
-                    case 2: HotKeyCenter.shared.modeHandler?()
-                    case 3: HotKeyCenter.shared.memoryHandler?()
-                    default: HotKeyCenter.shared.handler?()
-                    }
-                }
+            InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
+                DispatchQueue.main.async { HotKeyCenter.shared.handler?() }
                 return noErr
             }, 1, &spec, nil, nil)
             installed = true
@@ -212,17 +190,9 @@ final class HotKeyCenter {
         case .optionSpace: (kVK_Space, optionKey)
         case .controlSpace: (kVK_Space, controlKey)
         case .commandShiftL: (kVK_ANSI_L, cmdKey | shiftKey)
+        case .off: (0, 0)
         }
-        // Same keys plus ⇧ cycles the mode; ⇧⌘L already has ⇧, so it takes ⌥ as well.
-        let modeMods = key == .commandShiftL ? mods | optionKey : mods | shiftKey
-        let memory = (code: kVK_ANSI_M, mods: controlKey | optionKey)
-        combos = [(code, mods), (code, modeMods), memory]
-        for (id, k, m) in [(UInt32(1), code, mods), (UInt32(2), code, modeMods), (UInt32(3), memory.code, memory.mods)] {
-            var ref: EventHotKeyRef?
-            let hk = EventHotKeyID(signature: OSType(0x4C494E41), id: id)
-            if RegisterEventHotKey(UInt32(k), UInt32(m), hk, GetApplicationEventTarget(), 0, &ref) == noErr, let ref {
-                refs.append(ref)
-            }
-        }
+        let id = EventHotKeyID(signature: OSType(0x4C494E41), id: 1)
+        RegisterEventHotKey(UInt32(code), UInt32(mods), id, GetApplicationEventTarget(), 0, &ref)
     }
 }

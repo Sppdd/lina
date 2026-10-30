@@ -1,46 +1,33 @@
 import SwiftUI
 
 struct MenuBarView: View {
-    @ObservedObject var engine: GhostEngine
-    @ObservedObject var palette: PaletteController
-    @ObservedObject var companion: Companion
+    @ObservedObject var engine: LinaEngine
     @ObservedObject var settings = AppSettings.shared
-    @ObservedObject var stats = WritingStats.shared
+    @ObservedObject var history = History.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Wordmark(size: 20)
+            HStack(spacing: 12) {
+                LinaFace(mood: engine.mood, head: true, animated: true)
+                    .frame(width: 40, height: 41)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Lina").font(Theme.serif(18, weight: .semibold))
+                    Text(statusLine)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(engine.mood == .worried ? Mood.worried.hair : .secondary)
+                        .lineLimit(2)
+                }
                 Spacer()
-                StatusPill(status: engine.status, app: engine.currentApp.name)
+                Circle().fill(engine.mood.hair).frame(width: 8, height: 8).help(engine.mood.meaning)
             }
             .padding(.horizontal, 4)
 
             callout
 
-            todayCard
-
             VStack(spacing: 0) {
-                ToggleRow(title: "Think with me", subtitle: "A popup above your cursor", isOn: $settings.companionEnabled)
+                ToggleRow(title: "Lina is on", subtitle: "Answers /lina in any app", isOn: $settings.enabled)
                 Divider().padding(.leading, 12)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Mode").font(.system(size: 13))
-                        Spacer()
-                        Text(settings.hotKey.modeTitle).font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                    Picker("Mode", selection: $settings.companionMode) {
-                        ForEach(CompanionMode.allCases) { Text($0.title).tag($0) }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .controlSize(.small)
-                    Text(settings.companionMode.blurb).font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                Divider().padding(.leading, 12)
-                ToggleRow(title: "Ghost text", subtitle: "Optional autocomplete at the cursor", isOn: $settings.enabled)
+                ToggleRow(title: "Check sentences", subtitle: "Fixes above your mistakes when you pause", isOn: $settings.checkSentences)
                 if !engine.currentApp.bundleID.isEmpty {
                     Divider().padding(.leading, 12)
                     ToggleRow(title: "Pause in \(engine.currentApp.name)", subtitle: nil, isOn: Binding(
@@ -53,27 +40,44 @@ struct MenuBarView: View {
             }
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.primary.opacity(0.04)))
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("TYPE IN ANY APP").font(.system(size: 9.5, weight: .semibold)).tracking(0.6).foregroundStyle(.tertiary)
+                FlowLayout(spacing: 6) {
+                    ForEach(["/lina ↩", "/lina fix", "/lina rewrite polite", "/lina model", "/lina <question>"], id: \.self) { c in
+                        Text(c)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Capsule().fill(Theme.ink.opacity(0.08)))
+                    }
+                }
+            }
+            .padding(.horizontal, 4)
+
+            if let last = history.items.first {
+                Button { open(.saved) } label: {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: last.kind.symbol).foregroundStyle(Theme.ink).frame(width: 16)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Last: \(last.prompt)").font(.system(size: 11.5, weight: .medium)).lineLimit(1)
+                            Text(last.result).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.paper))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.paperEdge, lineWidth: 0.5))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
             VStack(spacing: 2) {
-                MenuRow(title: companion.isVisible ? "Hide Lina" : "Show Lina", symbol: "text.bubble",
-                        shortcut: settings.hotKey.title) {
-                    closeMenu()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { companion.toggle() }
-                }
-                MenuRow(title: "Rewrite with Lina…", symbol: "pencil.and.scribble", shortcut: nil) {
-                    closeMenu()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { palette.open() }
-                }
-                MenuRow(title: "Open Desk", symbol: "doc.richtext", shortcut: nil) {
-                    closeMenu()
-                    WindowOpener.shared.open("desk")
-                }
+                MenuRow(title: "Open Lina", symbol: "face.smiling", shortcut: nil) { open(.meet) }
+                MenuRow(title: "Saved", symbol: "tray.full", shortcut: nil) { open(.saved) }
                 MenuRow(title: "Settings…", symbol: "gearshape", shortcut: "⌘,") {
                     closeMenu()
                     WindowOpener.shared.settings()
-                }
-                MenuRow(title: "Report a Problem…", symbol: "ladybug", shortcut: nil) {
-                    closeMenu()
-                    WindowOpener.shared.open("report")
                 }
                 Divider().padding(.vertical, 4)
                 MenuRow(title: "Quit Lina", symbol: "power", shortcut: "⌘Q") { NSApp.terminate(nil) }
@@ -84,6 +88,27 @@ struct MenuBarView: View {
         .frame(width: 320)
     }
 
+    private var statusLine: String {
+        let app = engine.currentApp.name
+        switch engine.status {
+        case .ready: return app.isEmpty ? "Ready when you are" : "Ready in \(app)"
+        case .listening: return "Listening… press Return to run it"
+        case let .working(label): return label
+        case .waiting: return "Waiting for your ⌘ choice"
+        case .off: return "Off"
+        case .paused: return "Paused in \(app)"
+        case .needsPermission: return "Needs Accessibility access"
+        case .needsModel: return Account.shared.isConfigured ? "Sign in to start" : "Needs an API key"
+        case let .error(message): return message
+        }
+    }
+
+    private func open(_ section: HomeSection) {
+        closeMenu()
+        HomeNavigation.shared.section = section
+        WindowOpener.shared.open("home")
+    }
+
     private func closeMenu() {
         NSApp.keyWindow?.close()
     }
@@ -91,108 +116,24 @@ struct MenuBarView: View {
     @ViewBuilder private var callout: some View {
         switch engine.status {
         case .needsPermission:
-            Callout(symbol: "hand.raised.fill", tint: .orange,
+            Callout(symbol: "hand.raised.fill", tint: Mood.worried.hair,
                     title: "Lina needs Accessibility access",
-                    message: "So it can read the text field you're writing in and show suggestions at your cursor.",
+                    message: "So she can read the line you're typing and show her card under it.",
                     action: ("Grant Access", { AX.grantAccess() }))
         case .needsModel:
             Callout(symbol: "key.fill", tint: Theme.ink,
-                    title: "Connect a model",
-                    message: "Add your Nebius API key, or point Lina at a model running on this Mac.",
+                    title: Account.shared.isConfigured ? "Sign in to Lina" : "Connect a model",
+                    message: Account.shared.isConfigured
+                        ? "Sign in with your email in Settings → Account. No API keys needed."
+                        : "Add a Nebius API key (and a Gemini key for web search), or use a model on this Mac.",
                     action: ("Open Settings", { closeMenu(); WindowOpener.shared.settings() }))
         case let .error(message):
-            Callout(symbol: "exclamationmark.triangle.fill", tint: .orange,
-                    title: "Lina couldn't reach the model",
+            Callout(symbol: "exclamationmark.triangle.fill", tint: Mood.worried.hair,
+                    title: "Something went wrong",
                     message: message,
-                    action: ("Try Again", { engine.clearError() }))
+                    action: ("Try Again", { engine.dismiss() }))
         default:
             EmptyView()
-        }
-    }
-
-    private var todayCard: some View {
-        let today = stats.today
-        let goal = max(1, settings.dailyGoal)
-        let week = stats.lastDays(7)
-        let peak = max(goal, week.map(\.words).max() ?? 1)
-        return HStack(spacing: 14) {
-            ZStack {
-                ProgressRing(progress: Double(today.words) / Double(goal), lineWidth: 5)
-                Image(systemName: today.words >= goal ? "checkmark" : "pencil")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.ink)
-            }
-            .frame(width: 46, height: 46)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(today.words)")
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .contentTransition(.numericText())
-                Text("of \(goal) words today")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
-                if stats.streak > 1 {
-                    Text("\(stats.streak)-day streak")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.ink)
-                } else if today.accepted > 0 {
-                    Text("\(today.accepted) suggestion\(today.accepted == 1 ? "" : "s") kept")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.ink)
-                }
-            }
-            Spacer()
-            HStack(alignment: .bottom, spacing: 3) {
-                ForEach(Array(week.enumerated()), id: \.offset) { i, day in
-                    VStack(spacing: 3) {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(i == week.count - 1 ? Theme.ink : Theme.ink.opacity(0.3))
-                            .frame(width: 6, height: max(3, 36 * CGFloat(day.words) / CGFloat(peak)))
-                        Text(day.label).font(.system(size: 8.5, weight: .medium)).foregroundStyle(.tertiary)
-                    }
-                }
-            }
-            .frame(height: 50, alignment: .bottom)
-            .accessibilityLabel("Words written in the last seven days")
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.paper))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.paperEdge, lineWidth: 0.5))
-    }
-}
-
-struct StatusPill: View {
-    let status: GhostEngine.Status
-    let app: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(color).frame(width: 7, height: 7)
-            Text(label).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(Capsule().fill(.primary.opacity(0.05)))
-    }
-
-    private var color: Color {
-        switch status {
-        case .listening, .showing: .green
-        case .thinking: Theme.ink
-        case .paused: .secondary
-        case .needsPermission, .needsModel, .error: .orange
-        }
-    }
-
-    private var label: String {
-        switch status {
-        case .listening: app.isEmpty ? "Reading along" : "Reading along"
-        case .thinking: "Thinking…"
-        case .showing: "Suggesting"
-        case .paused: "Paused"
-        case .needsPermission: "Needs access"
-        case .needsModel: "No model"
-        case .error: "Offline"
         }
     }
 }

@@ -33,11 +33,6 @@ struct FocusSnapshot {
     var paragraph: String {
         text.substring(with: paragraphRange).trimmingCharacters(in: .newlines)
     }
-
-    func context() -> WritingContext {
-        WritingContext(before: before, after: after, selection: selectedText,
-                       appName: appName, windowTitle: windowTitle)
-    }
 }
 
 enum AX {
@@ -94,12 +89,16 @@ enum AX {
         AXUIElementIsAttributeSettable(focused, kAXValueAttribute as CFString, &settable)
         guard textRoles.contains(role) || settable.boolValue else { return nil }
 
-        guard let value: String = copy(focused, kAXValueAttribute) else { return nil }
-        guard let rangeValue: AXValue = copy(focused, kAXSelectedTextRangeAttribute) else { return nil }
-        var cf = CFRange()
-        guard AXValueGetValue(rangeValue, .cfRange, &cf) else { return nil }
-
+        // Empty fields (a fresh search box) often report no value at all, and some fields don't report a
+        // selection: treat them as empty, with the caret at the end, rather than as unreadable.
+        let value: String = copy(focused, kAXValueAttribute) ?? ""
         let ns = value as NSString
+        var cf = CFRange(location: ns.length, length: 0)
+        if let rangeValue: AXValue = copy(focused, kAXSelectedTextRangeAttribute) {
+            var reported = CFRange()
+            if AXValueGetValue(rangeValue, .cfRange, &reported) { cf = reported }
+        }
+
         let sel = NSRange(location: max(0, min(cf.location, ns.length)), length: max(0, cf.length))
         let caret = caretRect(focused, at: sel.location, textLength: ns.length)
         if requireCaret && caret == nil { return nil }
@@ -114,28 +113,6 @@ enum AX {
                              windowTitle: windowTitle, text: ns, selection: sel, caretRect: caret)
     }
 
-    /// Just the caret of the focused text field and which app it's in, without copying the whole text.
-    /// Cheap enough to call a few times a second for the ink drop.
-    static func caret() -> (rect: CGRect, bundleID: String)? {
-        guard isTrusted, !IsSecureEventInputEnabled(),
-              let app = NSWorkspace.shared.frontmostApplication,
-              app.processIdentifier != ProcessInfo.processInfo.processIdentifier
-        else { return nil }
-        let appEl = AXUIElementCreateApplication(app.processIdentifier)
-        AXUIElementSetMessagingTimeout(appEl, 0.1)
-        guard let focused: AXUIElement = copy(appEl, kAXFocusedUIElementAttribute) else { return nil }
-        AXUIElementSetMessagingTimeout(focused, 0.1)
-        let subrole: String = copy(focused, kAXSubroleAttribute) ?? ""
-        guard subrole != (kAXSecureTextFieldSubrole as String),
-              let rangeValue: AXValue = copy(focused, kAXSelectedTextRangeAttribute)
-        else { return nil }
-        var cf = CFRange()
-        guard AXValueGetValue(rangeValue, .cfRange, &cf),
-              let rect = caretRect(focused, at: cf.location, textLength: Int.max)
-        else { return nil }
-        return (rect, app.bundleIdentifier ?? "")
-    }
-
     /// Selects a range in the given element (used before replacing a paragraph).
     @discardableResult
     static func select(_ range: NSRange, in element: AXUIElement) -> Bool {
@@ -144,54 +121,23 @@ enum AX {
         return AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, v) == .success
     }
 
-    /// Where a range of text sits on screen, in Cocoa coordinates. Used to point at the writer's words.
-    static func screenRect(for range: NSRange, in element: AXUIElement) -> CGRect? {
-        guard let ax = bounds(element, CFRange(location: range.location, length: range.length)) else { return nil }
-        return cocoa(ax)
+    /// Where a range of text sits on screen, in Cocoa coordinates (origin bottom-left).
+    /// Used to underline mistakes and point tips at the writer's words.
+    static func screenRect(of range: NSRange, in element: AXUIElement) -> CGRect? {
+        guard let r = bounds(element, CFRange(location: range.location, length: range.length)) else { return nil }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        return CGRect(x: r.minX, y: primaryHeight - r.maxY, width: r.width, height: r.height)
     }
 
-    /// What Lina can see of the focused field right now, for problem reports. No text, only its shape.
-    @MainActor static func describeFocus() -> String {
-        guard var app = NSWorkspace.shared.frontmostApplication else { return "- No app in front." }
-        let me = ProcessInfo.processInfo.processIdentifier
-        var note: String?
-        if app.processIdentifier == me, let last = Diagnostics.lastApp, !last.isTerminated {
-            app = last
-            note = "- (Lina's own window was in front; this is the app used just before.)"
-        }
-        var out = ["- App: \(app.localizedName ?? "?") (\(app.bundleIdentifier ?? "no bundle id"))"] + [note].compactMap { $0 }
-        if app.processIdentifier == me {
-            out.append("- Lina itself is in front, so this says nothing about the app you were writing in.")
-            if let tv = DeskRegistry.shared.textView, tv.window?.isVisible == true {
-                out.append("- Desk open: \((tv.string as NSString).length) characters, selection \(tv.selectedRange())")
-            }
-            return out.joined(separator: "\n")
-        }
-        guard isTrusted else { return (out + ["- Accessibility isn't granted, so Lina can't see the field."]).joined(separator: "\n") }
-        if note == nil, IsSecureEventInputEnabled() { out.append("- Secure input is on (a password field or a terminal asked for it): Lina is blind here.") }
-        let appEl = AXUIElementCreateApplication(app.processIdentifier)
-        AXUIElementSetMessagingTimeout(appEl, 0.5)
-        guard let focused: AXUIElement = copy(appEl, kAXFocusedUIElementAttribute) else {
-            return (out + ["- No focused element reported. The app may not support Accessibility, or no text field is focused."]).joined(separator: "\n")
-        }
-        let role: String = copy(focused, kAXRoleAttribute) ?? "?"
-        let subrole: String = copy(focused, kAXSubroleAttribute) ?? "none"
-        var settable: DarwinBoolean = false
-        AXUIElementIsAttributeSettable(focused, kAXValueAttribute as CFString, &settable)
-        out.append("- Focused element: role \(role), subrole \(subrole), value settable: \(settable.boolValue)")
-        let value: String? = copy(focused, kAXValueAttribute)
-        out.append("- Text: \(value.map { "\(($0 as NSString).length) characters" } ?? "not readable")")
-        if let rv: AXValue = copy(focused, kAXSelectedTextRangeAttribute) {
-            var cf = CFRange()
-            AXValueGetValue(rv, .cfRange, &cf)
-            out.append("- Selection: location \(cf.location), length \(cf.length)")
-            let caret = caretRect(focused, at: cf.location, textLength: Int.max)
-            out.append("- Caret on screen: \(caret.map { "\(Int($0.minX)), \(Int($0.minY)), height \(Int($0.height))" } ?? "not reported (the ink drop can't follow it here)")")
-        } else {
-            out.append("- Selection: not reported")
-        }
-        if note == nil { out.append("- Lina's full read: \(snapshot(requireCaret: false) == nil ? "fails" : "works")") }
-        return out.joined(separator: "\n")
+    /// The focused field's frame on screen, in Cocoa coordinates: a fallback anchor for cards
+    /// when an app won't say where its caret is.
+    static func frame(of element: AXUIElement) -> CGRect? {
+        guard let posValue: AXValue = copy(element, kAXPositionAttribute),
+              let sizeValue: AXValue = copy(element, kAXSizeAttribute) else { return nil }
+        var pos = CGPoint.zero, size = CGSize.zero
+        guard AXValueGetValue(posValue, .cgPoint, &pos), AXValueGetValue(sizeValue, .cgSize, &size) else { return nil }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        return CGRect(x: pos.x, y: primaryHeight - pos.y - size.height, width: size.width, height: size.height)
     }
 
     // MARK: Internals
@@ -225,11 +171,7 @@ enum AX {
             axRect = CGRect(x: r.maxX, y: r.minY, width: 1, height: r.height)
         }
         guard let ax = axRect else { return nil }
-        return cocoa(ax)
-    }
-
-    /// Accessibility uses top-left origin on the primary screen; Cocoa uses bottom-left.
-    private static func cocoa(_ ax: CGRect) -> CGRect {
+        // Accessibility uses top-left origin on the primary screen; Cocoa uses bottom-left.
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         return CGRect(x: ax.minX, y: primaryHeight - ax.maxY, width: ax.width, height: ax.height)
     }

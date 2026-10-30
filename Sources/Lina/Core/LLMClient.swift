@@ -2,8 +2,11 @@ import Foundation
 
 struct LLMEndpoint: Equatable, Sendable {
     var baseURL: String
+    /// A provider key in development, or the user's session token when going through Lina's server.
     var apiKey: String
     var model: String
+    /// Extra headers, e.g. which job a request is for when it goes through Lina's server.
+    var headers: [String: String] = [:]
 }
 
 struct ChatMessage: Codable, Sendable {
@@ -19,19 +22,39 @@ enum LLMError: LocalizedError {
     case badURL
     case http(Int, String)
     case notConfigured
+    case message(String)
 
     var errorDescription: String? {
         switch self {
         case .badURL: "The server address isn't a valid URL."
-        case .notConfigured: "Add your Nebius API key in Settings → Model."
+        case .notConfigured: "Add your Nebius API key in Settings → Models."
+        case let .message(m): m
         case let .http(code, body):
             switch code {
-            case 401, 403: "The API key was rejected (\(code)). Check it in Settings → Model."
-            case 404: "Model not found (404). Pick another model in Settings."
-            case 429: "Rate limited. Lina will try again in a moment."
-            default: "Server error \(code). \(body.prefix(160))"
+            case 401: "Lina couldn't sign you in (401). Sign in again, or check the key in Settings."
+            case 402, 403: Self.isServerMessage(body) ? Self.serverMessage(body) : "Not allowed (\(code)). Check your account or key in Settings."
+            case 404: "Model not found (404). Type /lina model to pick another."
+            case 429: body.contains("today") ? Self.serverMessage(body) : "Lina is busy right now. Try again in a moment."
+            default: Self.isServerMessage(body) ? Self.serverMessage(body) : "Server error \(code). \(body.prefix(160))"
             }
         }
+    }
+}
+
+extension LLMError {
+    /// Whether the body is Lina's server explaining itself: `{"error": "…"}`.
+    static func isServerMessage(_ body: String) -> Bool {
+        guard let data = body.data(using: .utf8),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return false }
+        return json["error"] is String
+    }
+
+    /// The `error` text Lina's server sends with a refusal, e.g. "You've used today's 20 searches."
+    static func serverMessage(_ body: String) -> String {
+        if let data = body.data(using: .utf8),
+           let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+           let message = json["error"] as? String { return message }
+        return String(body.prefix(200))
     }
 }
 
@@ -109,11 +132,43 @@ struct LLMClient: Sendable {
         guard let url = URL(string: endpoint.baseURL.trimmedSlash + "/models") else { throw LLMError.badURL }
         var req = URLRequest(url: url, timeoutInterval: 15)
         req.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization")
+        for (k, v) in endpoint.headers { req.setValue(v, forHTTPHeaderField: k) }
         let (data, response) = try await URLSession.shared.data(for: req)
         let code = (response as? HTTPURLResponse)?.statusCode ?? 200
         guard code < 400 else { throw LLMError.http(code, String(data: data, encoding: .utf8) ?? "") }
         struct ModelList: Decodable { struct M: Decodable { let id: String }; let data: [M] }
         return try JSONDecoder().decode(ModelList.self, from: data).data.map(\.id).sorted()
+    }
+
+    /// Makes a picture with an OpenAI-compatible images endpoint (Token Factory's FLUX models).
+    func generateImage(prompt: String, model: String, size: Int = 1024) async throws -> Data {
+        guard let url = URL(string: endpoint.baseURL.trimmedSlash + "/images/generations") else { throw LLMError.badURL }
+        var req = URLRequest(url: url, timeoutInterval: 120)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization")
+        for (k, v) in endpoint.headers { req.setValue(v, forHTTPHeaderField: k) }
+        let body: [String: Any] = [
+            "model": model,
+            "prompt": prompt,
+            "response_format": "b64_json",
+            "response_extension": "png",
+            "width": size,
+            "height": size,
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 200
+        guard code < 400 else { throw LLMError.http(code, String(data: data, encoding: .utf8) ?? "") }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let first = (json["data"] as? [[String: Any]])?.first
+        else { throw LLMError.message("The image model sent nothing back.") }
+        if let b64 = first["b64_json"] as? String, let png = Data(base64Encoded: b64) { return png }
+        if let link = first["url"] as? String, let u = URL(string: link) {
+            let (png, _) = try await URLSession.shared.data(from: u)
+            return png
+        }
+        throw LLMError.message("The image model sent nothing back.")
     }
 
     private func makeRequest(_ messages: [ChatMessage], maxTokens: Int, temperature: Double,
@@ -123,6 +178,7 @@ struct LLMClient: Sendable {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization")
+        for (k, v) in endpoint.headers { req.setValue(v, forHTTPHeaderField: k) }
 
         var msgs = messages
         if disableThinking && isNemotron, let first = msgs.first, first.role == "system" {
@@ -191,4 +247,39 @@ struct ThinkFilter {
 
 extension String {
     var trimmedSlash: String { hasSuffix("/") ? String(dropLast()) : self }
+}
+
+/// One model on the provider, sorted by what it makes.
+struct ModelItem: Identifiable, Hashable {
+    enum Kind: String { case text, image }
+
+    let id: String
+    let kind: Kind
+
+    var shortName: String { id.split(separator: "/").last.map(String.init) ?? id }
+    var maker: String { id.contains("/") ? id.split(separator: "/").first.map(String.init) ?? "" : "" }
+}
+
+enum ModelCatalog {
+    static let defaultImageModel = "black-forest-labs/flux-schnell"
+
+    /// Text or image, or nil for models Lina can't use (embeddings, guards, speech).
+    static func kind(of id: String) -> ModelItem.Kind? {
+        let l = id.lowercased()
+        let skip = ["embed", "bge-", "e5-", "rerank", "guard", "whisper", "tts", "clip"]
+        if skip.contains(where: { l.contains($0) }) { return nil }
+        let image = ["flux", "stable-diffusion", "sdxl", "sd3", "dall-e", "imagen", "kandinsky", "playground", "-image", "image-"]
+        if image.contains(where: { l.contains($0) }) { return .image }
+        return .text
+    }
+
+    /// Usable models, NVIDIA first, then alphabetical.
+    static func items(_ ids: [String]) -> [ModelItem] {
+        ids.compactMap { id in kind(of: id).map { ModelItem(id: id, kind: $0) } }
+            .sorted { a, b in
+                let an = a.id.lowercased().contains("nvidia"), bn = b.id.lowercased().contains("nvidia")
+                if an != bn { return an }
+                return a.id.localizedCaseInsensitiveCompare(b.id) == .orderedAscending
+            }
+    }
 }

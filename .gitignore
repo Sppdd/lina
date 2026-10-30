@@ -5,4 +5,5 @@ build/
 .DS_Store
 *.xcodeproj/xcuserdata/
 .swiftpm/
-media/
+supabase/.temp/
+supabase/.branches/

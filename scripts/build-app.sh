@@ -4,11 +4,19 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP=build/Lina.app
-VERSION=${VERSION:-1.3.0}
+VERSION=${VERSION:-1.0.0}
 
 echo "› Compiling"
 swift build -c release --arch arm64 2>&1 | tail -1
 BIN=$(swift build -c release --arch arm64 --show-bin-path)/Lina
+
+# Lina's server (Supabase). The URL and publishable (anon) key are public by design and go into Info.plist,
+# so people who download Lina just sign in. Taken from the environment, or from .env for local builds.
+# Never put the service_role key or provider keys here; they live in Supabase secrets.
+env_value() { [[ -f .env ]] && grep -E "^(export )?$1=" .env | tail -1 | cut -d= -f2- | tr -d "\"'" || true; }
+SUPABASE_URL=${SUPABASE_URL:-$(env_value SUPABASE_URL)}
+SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-$(env_value SUPABASE_ANON_KEY)}
+[[ -n "$SUPABASE_URL" ]] && echo "› Lina server: $SUPABASE_URL" || echo "› No SUPABASE_URL: this build uses developer keys"
 
 echo "› Assembling $APP"
 rm -rf "$APP"
@@ -46,9 +54,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSHumanReadableCopyright</key><string>Open source under the MIT License.</string>
-  <key>NSMicrophoneUsageDescription</key><string>Hold ⌃⌥ to talk to Lina. Your voice is turned into text on this Mac.</string>
-  <key>NSSpeechRecognitionUsageDescription</key><string>Lina turns what you say into text, on this Mac when your language supports it.</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+  <key>LinaSupabaseURL</key><string>${SUPABASE_URL}</string>
+  <key>LinaSupabaseAnonKey</key><string>${SUPABASE_ANON_KEY}</string>
 </dict>
 </plist>
 PLIST
