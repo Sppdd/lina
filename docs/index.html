@@ -240,7 +240,7 @@ footer a:hover { color: var(--text); }
     <a class="pill light" href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>Download for Mac</a>
     <a class="pill ghost" href="https://github.com/Sppdd/lina">View the source</a>
   </div>
-  <div class="fine">macOS 14 or later · Apple Silicon · MIT licensed · <a href="#install" style="text-decoration:underline">First-time setup</a></div>
+  <div class="fine">macOS 14 or later · Apple Silicon · MIT licensed · Or in Terminal: <code style="font:12px var(--mono);color:var(--muted)">curl -fsSL https://sppdd.github.io/lina/install.sh | zsh</code></div>
   <div class="badges">
     <span class="badge">Runs on <b>NVIDIA Nemotron</b></span>
     <span class="badge">Served by Nebius Token Factory</span>
@@ -334,11 +334,15 @@ footer a:hover { color: var(--text); }
   <h2>Download, open, <span class="dim">type /lina.</span></h2>
   <div class="steps">
     <div class="card"><h4>Download</h4><p><a href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip" style="color:var(--ink)">Lina.zip</a>, unzip it, and drag <b>Lina.app</b> into Applications.</p></div>
-    <div class="card"><h4>Open it once</h4><p>Lina isn't notarized yet. If macOS blocks it, open <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>.</p></div>
+    <div class="card"><h4>Seeing “Lina Not Opened”?</h4><p>Lina isn't notarized by Apple yet. Click <b>Done</b> (not Move to Trash), then <b>System Settings → Privacy &amp; Security → Open Anyway</b>. The one-line install below skips this.</p></div>
     <div class="card"><h4>Allow Accessibility</h4><p>The welcome screen asks for it, so Lina can read the line you're on when you ask.</p></div>
     <div class="card"><h4>Sign in</h4><p>Enter your email and the code Lina sends you. No keys needed. Or paste your own <a href="https://tokenfactory.nebius.com" style="color:var(--ink)">Nebius Token Factory</a> key, or pick <b>On this Mac</b>.</p></div>
   </div>
-  <pre><span class="c"># If macOS still refuses to open it, clear the download flag:</span>
+  <pre><span class="c"># Easiest: install with one line in Terminal. No "could not verify" warning.</span>
+curl -fsSL https://sppdd.github.io/lina/install.sh | zsh
+<span class="c"># (It's short: <a href="install.sh" style="color:var(--ink)">read it first</a>.)</span>
+
+<span class="c"># Downloaded the zip and macOS blocks it? Clear the download flag:</span>
 xattr -dr com.apple.quarantine /Applications/Lina.app
 
 <span class="c"># Or build it from source (Xcode 16 command line tools):</span>

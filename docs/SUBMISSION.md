@@ -19,7 +19,7 @@ Nebius × NVIDIA Global AI Hackathon · **Personal AI** track
 | Track selection | Personal AI | ⬜ choose on Devpost |
 | Feedback on Nebius and NVIDIA tools | Below | ✅ paste into Devpost |
 
-**For judges testing the build:** sign in during onboarding with your email and the code Lina sends you. No keys are needed; Lina's server holds them and counts each person's daily use. If the code email doesn't arrive (the sender is rate-limited), skip sign-in and paste a free Nebius Token Factory key instead; a Gemini key is optional.
+**For judges testing the build:** install with `curl -fsSL https://sppdd.github.io/lina/install.sh | zsh` (Lina isn't notarized yet, and this skips macOS's "could not verify" warning), then sign in during onboarding with your email and the code Lina sends you. No keys are needed; Lina's server holds them and counts each person's daily use. If the code email doesn't arrive (the sender is rate-limited), skip sign-in and paste a free Nebius Token Factory key instead; a Gemini key is optional.
 
 ---
 
