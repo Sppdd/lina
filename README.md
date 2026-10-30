@@ -31,6 +31,8 @@
 
 Most AI writing tools interrupt you. Lina waits.
 
+<p align="center"><img src="docs/lina-demo.gif" width="720" alt="Lina on a Mac desktop: a web answer mid-sentence, typo chips, a question, rewrites, a picture, and hold-to-talk memory"></p>
+
 Type `/lina` and what you want right in your text, in **any field of any app** (Notes, Mail, Slack, a browser's search box). Lina tints and underlines the command so it reads as hers, not yours. Press Return and she gets to work; Return never reaches the app, so a search box won't submit. The answer waits in a card under your line: a fact from the web worded to fit your sentence, a question that makes you think, three rewrites, or a picture. **Nothing goes into your text until you press ⌘1, ⌘2 or ⌘3**, and then the answer takes the command's place, so there's nothing to delete. Esc takes the command back out and leaves your words exactly as they were.
 
 When you pause after finishing a sentence, Lina quietly checks it. If something's wrong, a small chip with the right word appears **right above each mistake**: ⌘1, ⌘2… fixes one, ⌘A fixes them all. If nothing's wrong, you never notice her. You choose how long she waits after you stop typing.

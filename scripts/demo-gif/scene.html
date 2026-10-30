@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Lina demo GIF scene</title>
+<!-- A Mac desktop with Lina at work, drawn frame by frame: make-gif.sh calls render(t) and screenshots it. -->
+<style>
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 960px; height: 640px; overflow: hidden; background: #000; }
+body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; -webkit-font-smoothing: antialiased; }
+#desk { position: absolute; inset: 0; background: linear-gradient(160deg, #2d2464 0%, #4b3fcf 38%, #8a7fe8 70%, #e7b8c9 100%); }
+#menubar { position: absolute; top: 0; left: 0; right: 0; height: 26px; background: rgba(20,16,40,.38); backdrop-filter: blur(20px);
+  display: flex; align-items: center; padding: 0 14px; gap: 18px; color: #fff; font-size: 13px; }
+#menubar b { font-weight: 700; }
+#menubar .sp { flex: 1; }
+#menubar .face { width: 20px; height: 22px; object-fit: cover; object-position: 50% 15%; border-radius: 5px; background: #fcfaf6; }
+#lstatus { font-size: 12px; opacity: .9; min-width: 120px; text-align: right; }
+#win { position: absolute; left: 100px; top: 62px; width: 760px; height: 440px; background: #fdfbf8; border-radius: 12px;
+  box-shadow: 0 30px 80px rgba(10,5,40,.55), 0 0 0 .5px rgba(0,0,0,.35); overflow: hidden; }
+#bar { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #f3f0ea; border-bottom: 1px solid #e6e1d8;
+  font-size: 13px; color: #6f6a62; }
+#bar i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+#bar i:nth-child(2) { background: #febc2e; } #bar i:nth-child(3) { background: #28c840; }
+#bar span { margin-left: 10px; font-weight: 600; }
+#page { position: relative; padding: 28px 40px; font: 20px/1.65 "New York", "Iowan Old Style", Georgia, serif; color: #23211e; }
+.caret { display: inline-block; width: 2px; height: 1.1em; background: #23211e; vertical-align: -3px; margin-left: 1px; }
+.cmd { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+.run { color: #3b82c4; } .working { color: #8a63e8; } .waiting { color: #c98d1c; }
+.tag { font: 700 12px -apple-system, sans-serif; margin-left: 6px; }
+.new { color: #4b3fcf; background: rgba(133,117,247,.16); border-radius: 3px; }
+.typo { text-decoration: underline wavy #d45a45; text-underline-offset: 5px; position: relative; }
+.typo.amber { text-decoration-color: #d49a2a; }
+.chip { position: absolute; left: -4px; bottom: 100%; transform: translateY(-2px); white-space: nowrap; font: 700 12.5px -apple-system, sans-serif;
+  color: #fff; background: #d45a45; padding: 3px 9px; border-radius: 999px; line-height: 1.3; }
+.chip.amber { background: #d49a2a; } .chip i { font-style: normal; opacity: .75; font-size: 10.5px; margin-left: 4px; }
+.fixall { display: inline-block; font: 700 12.5px -apple-system, sans-serif; color: #4b3fcf; border: 1.5px solid #b9b0f2; border-radius: 999px;
+  padding: 2px 9px; margin-left: 10px; vertical-align: 3px; line-height: 1.3; }
+#card { position: absolute; left: 40px; }
+#card img { display: block;
+  /* The rendered cards carry their own shadow, cut off at the image edge: fade that edge out. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 13px, #000 calc(100% - 13px), transparent),
+                      linear-gradient(to bottom, transparent, #000 13px, #000 calc(100% - 13px), transparent);
+  -webkit-mask-composite: source-in; mask-composite: intersect; }
+.pic { display: block; width: 300px; border-radius: 10px; margin-top: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+#notice { position: absolute; left: 40px; padding: 10px 14px; border-radius: 14px; background: #fbfaf8; border: 1.5px solid #bfe0c4;
+  box-shadow: 0 14px 40px rgba(30,20,90,.16); display: flex; gap: 10px; align-items: center; font: 600 14px -apple-system, sans-serif; color: #3d7f4d; }
+#notice img { width: 30px; height: 34px; object-fit: cover; object-position: 50% 15%; }
+#talk { position: absolute; left: 50%; top: 250px; transform: translateX(-50%); padding: 12px 18px; border-radius: 999px; background: rgba(28,24,48,.92);
+  color: #fff; display: flex; align-items: center; gap: 12px; font-size: 15px; box-shadow: 0 20px 50px rgba(0,0,0,.35); white-space: nowrap; }
+#talk img { width: 28px; height: 32px; object-fit: cover; object-position: 50% 15%; border-radius: 8px; background: #fcfaf6; }
+.wave { display: inline-flex; gap: 3px; align-items: center; height: 20px; }
+.wave b { width: 3px; border-radius: 2px; background: #7fb3e6; }
+#caption { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); text-align: center; color: #fff; white-space: nowrap;
+  text-shadow: 0 2px 12px rgba(20,10,60,.45); }
+#caption h1 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; }
+#caption p { font-size: 15px; opacity: .9; margin-top: 4px; }
+#caption kbd { font: 700 12.5px -apple-system, sans-serif; padding: 1px 7px; border-radius: 6px; background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.3); }
+#end { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: #fff; }
+#end img { width: 132px; filter: drop-shadow(0 18px 30px rgba(0,0,0,.35)); }
+#end h1 { font: 700 44px "New York", Georgia, serif; margin-top: 18px; }
+#end p { font-size: 18px; opacity: .92; margin-top: 8px; }
+#end .url { margin-top: 16px; font: 600 16px ui-monospace, Menlo, monospace; background: rgba(255,255,255,.14); padding: 8px 16px; border-radius: 999px; display: inline-block; }
+</style>
+</head>
+<body>
+<div id="desk">
+  <div id="menubar">
+    <span style="font-size:15px"></span><b id="appname">Notes</b><span>File</span><span>Edit</span><span>Format</span><span>View</span><span>Window</span>
+    <span class="sp"></span>
+    <span id="lstatus">Ready</span>
+    <img class="face" id="mface" src="assets/face-ready.png" alt="">
+    <span>Thu 9:41 AM</span>
+  </div>
+  <div id="win">
+    <div id="bar"><i></i><i></i><i></i><span id="wtitle">Match report</span></div>
+    <div id="page"><div id="text"></div><div id="card"></div></div>
+  </div>
+  <div id="caption"><h1 id="ch"></h1><p id="cp"></p></div>
+  <div id="extra"></div>
+</div>
+
+<script>
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+// The part of `s` typed by time t, typing from t0 to t1.
+const typed = (s, t0, t1, t) => s.slice(0, Math.max(0, Math.min(s.length, Math.round((t - t0) / (t1 - t0) * s.length))));
+const caret = '<span class="caret"></span>';
+const card = (src, w) => `<img src="assets/${src}.png" style="width:${w}px">`;
+const cmd = (text, state, tag) =>
+  `<span class="cmd ${state}">${esc(text)}</span>` + (tag ? `<span class="tag ${state}">${tag}</span>` : '');
+
+// Each scene: [start, end, app, window title, caption, subtitle, draw(local t) → {text, card, face, status, extra}]
+const scenes = [
+  [0, 6.2, 'Notes', 'Match report', 'Ask the web mid-sentence', 'Type <kbd>/lina</kbd> and a question, press <kbd>↩</kbd>, then <kbd>⌘1</kbd>', t => {
+    const before = 'The 2022 World Cup final ended ', c = '/lina who won and how';
+    if (t < 1.0) return { text: esc(typed(before, 0, 1.0, t)) + caret };
+    if (t < 2.2) return { text: esc(before) + cmd(typed(c, 1.0, 2.2, t), 'run') + caret, face: 'listening', status: 'Listening…' };
+    if (t < 2.7) return { text: esc(before) + cmd(c, 'run', '↩ run · esc') + caret, face: 'listening', status: 'Listening…' };
+    if (t < 3.5) return { text: esc(before) + cmd(c, 'working', 'working…') + caret, face: 'thinking', status: 'Searching the web…' };
+    if (t < 5.0) return { text: esc(before) + cmd(c, 'waiting', '⌘1 · esc') + caret, card: card('card-answer', 400), face: 'found', status: 'Waiting for ⌘1' };
+    return { text: esc(before) + '<span class="new">with Argentina beating France on penalties after a 3–3 draw</span>.' + caret, face: 'done', status: 'Done' };
+  }],
+  [6.2, 10.4, 'Notes', 'Thank-you note', 'Typos fixed right above each mistake', 'Finish a sentence and pause. <kbd>⌘1</kbd> fixes one, <kbd>⌘A</kbd> fixes all', t => {
+    const s = "Thank you for you're help. I realy do apreciate it.";
+    if (t < 1.6) return { text: esc(typed(s, 0, 1.6, t)) + caret };
+    if (t < 2.1) return { text: esc(s) + caret, face: 'thinking', status: 'Checking…' };
+    if (t < 3.4) return { face: 'found', status: 'Waiting for ⌘A', text:
+      `Thank you for <span class="typo amber">you're<span class="chip amber">your<i>⌘1</i></span></span> help. I <span class="typo">realy<span class="chip">really<i>⌘2</i></span></span> do <span class="typo">apreciate<span class="chip">appreciate<i>⌘3</i></span></span> it.${caret}<span class="fixall">Fix all ⌘A</span>` };
+    return { text: 'Thank you for <span class="new">your</span> help. I <span class="new">really</span> do <span class="new">appreciate</span> it.' + caret, face: 'done', status: 'Done' };
+  }],
+  [10.4, 14.6, 'Notes', 'Journal', 'A question that makes you think', '<kbd>/lina</kbd> on its own reads what you wrote and asks one thing', t => {
+    const s = 'I think I should take the new offer, even though I love my team. ';
+    if (t < 1.4) return { text: esc(typed(s, 0, 1.4, t)) + caret };
+    if (t < 1.9) return { text: esc(s) + cmd(typed('/lina', 1.4, 1.9, t), 'run') + caret, face: 'listening', status: 'Listening…' };
+    if (t < 2.5) return { text: esc(s) + cmd('/lina', 'working', 'working…') + caret, face: 'thinking', status: 'Reading what you wrote…' };
+    return { text: esc(s.trim()) + caret, card: card('card-question', 400), face: 'found', status: 'Lina asks' };
+  }],
+  [14.6, 19.0, 'Mail', 'Re: Monthly report', 'Rewrite it in any tone', '<kbd>/lina rewrite polite</kbd>, then pick one with <kbd>⌘1</kbd>–<kbd>⌘3</kbd>', t => {
+    const s = 'hey can u send the report asap ', c = '/lina rewrite polite';
+    if (t < 0.9) return { text: esc(typed(s, 0, 0.9, t)) + caret };
+    if (t < 1.8) return { text: esc(s) + cmd(typed(c, 0.9, 1.8, t), 'run') + caret, face: 'listening', status: 'Listening…' };
+    if (t < 2.3) return { text: esc(s) + cmd(c, 'working', 'working…') + caret, face: 'thinking', status: 'Writing three versions…' };
+    if (t < 3.6) return { text: esc(s) + cmd(c, 'waiting', '⌘1–⌘3 · esc') + caret, card: card('card-rewrite', 380), face: 'found', status: 'Waiting for ⌘1' };
+    return { text: '<span class="new">Hi, could you send me the report as soon as you can?</span>' + caret, face: 'done', status: 'Done' };
+  }],
+  [19.0, 23.2, 'Pages', 'Bedtime story', 'Pictures right where you type', '<kbd>/lina image …</kbd> draws with FLUX on Nebius Token Factory', t => {
+    const s = 'Mia found the book in a corner of the attic. ', c = '/lina image a cozy reading nook at dusk';
+    if (t < 0.8) return { text: esc(typed(s, 0, 0.8, t)) + caret };
+    if (t < 1.8) return { text: esc(s) + cmd(typed(c, 0.8, 1.8, t), 'run') + caret, face: 'listening', status: 'Listening…' };
+    if (t < 2.4) return { text: esc(s) + cmd(c, 'working', 'drawing…') + caret, face: 'thinking', status: 'Drawing with flux-schnell…' };
+    if (t < 3.3) return { text: esc(s) + cmd(c, 'waiting', '⌘1 · esc') + caret, card: card('card-image', 300), face: 'found', status: 'Waiting for ⌘1' };
+    return { text: esc(s.trim()) + '<img class="pic" src="assets/picture.png">', face: 'done', status: 'Done' };
+  }],
+  [23.2, 27.4, 'Notes', 'Wedding toast', 'Hold ⌃⌥ to talk. She remembers.', 'Say a command, or <kbd>/lina remember …</kbd> for next time', t => {
+    const said = "remember my sister's name is Noor";
+    const wave = n => `<span class="wave">${[6, 14, 9, 17, 8, 12].map((h, i) => `<b style="height:${Math.max(4, h * (0.5 + 0.5 * Math.abs(Math.sin(n * 7 + i))))}px"></b>`).join('')}</span>`;
+    if (t < 1.8) return { text: caret, face: 'listening', status: 'Listening…',
+      extra: `<div id="talk"><img src="assets/face-listening.png">${wave(t)}<span>${esc(typed(said, 0.3, 1.6, t))}</span></div>` };
+    if (t < 2.5) return { text: cmd('/lina ' + said, 'working', 'working…') + caret, face: 'thinking', status: 'Working…' };
+    return { text: caret, face: 'done', status: 'Saved to memory',
+      extra: '' , notice: true };
+  }],
+  [27.4, 30.0, null, null, '', '', t => ({ end: true, face: 'ready', status: 'Ready' })],
+];
+const DURATION = scenes[scenes.length - 1][1];
+
+function render(t) {
+  const sc = scenes.find(s => t >= s[0] && t < s[1]) || scenes[scenes.length - 1];
+  const st = sc[6](t - sc[0]);
+  if (sc[2]) { appname.textContent = sc[2]; wtitle.textContent = sc[3]; }
+  ch.innerHTML = sc[4]; cp.innerHTML = sc[5];
+  document.getElementById('text').innerHTML = st.text || '';
+  const c = document.getElementById('card');
+  c.innerHTML = st.card || '';
+  const line = document.getElementById('text').getBoundingClientRect(), page = document.getElementById('page').getBoundingClientRect();
+  c.style.top = (line.bottom - page.top + 4) + 'px';
+  mface.src = `assets/face-${st.face || 'ready'}.png`;
+  lstatus.textContent = st.status || 'Ready';
+  let extra = st.extra || '';
+  if (st.notice) extra += `<div id="notice" style="top:${62 + 34 + 28 + 40}px;left:140px"><img src="assets/face-done.png">Saved to my memory.</div>`;
+  if (st.end) extra += `<div id="end"><div><img src="../../docs/icon.png" alt=""><h1>Lina</h1><p>Lives at your cursor. Speaks only when you ask.</p><p style="opacity:.75;font-size:15px">NVIDIA Nemotron on Nebius Token Factory · free and open source</p><div class="url">sppdd.github.io/lina</div></div></div>`;
+  document.getElementById('extra').innerHTML = extra;
+  document.getElementById('win').style.visibility = st.end ? 'hidden' : 'visible';
+  return true;
+}
+// ?scale=1.5 renders the same 960×640 scene at 1440×960 for a sharper GIF.
+const scale = +new URLSearchParams(location.search).get('scale') || 1;
+if (scale !== 1) document.documentElement.style.zoom = scale;
+render(0);
+</script>
+</body>
+</html>
