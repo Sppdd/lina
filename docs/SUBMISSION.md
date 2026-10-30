@@ -19,7 +19,7 @@ Nebius × NVIDIA Global AI Hackathon · **Personal AI** track
 | Track selection | Personal AI | ⬜ choose on Devpost |
 | Feedback on Nebius and NVIDIA tools | Below | ✅ paste into Devpost |
 
-**For judges testing the build:** the release runs with your own keys. Paste a free Nebius Token Factory key in onboarding; a Gemini key is optional (it adds live web answers, or turn on Wikipedia in Settings → Search instead). Accounts through Lina's server are built (`supabase/functions/lina-ai`) but not deployed yet.
+**For judges testing the build:** sign in during onboarding with your email and the code Lina sends you. No keys are needed; Lina's server holds them and counts each person's daily use. If the code email doesn't arrive (the sender is rate-limited), skip sign-in and paste a free Nebius Token Factory key instead; a Gemini key is optional.
 
 ---
 
@@ -64,7 +64,7 @@ Lina is a native Swift and SwiftUI app.
 - **Models:** **NVIDIA Nemotron 3 Super** on **Nebius Token Factory** answers commands. **Nemotron 3 Nano** proofreads each finished sentence and returns exact spans as JSON, so each fix can be placed over its word. **FLUX schnell** on the same key draws pictures. `/lina model` lists every Token Factory model and switches with a keystroke.
 - **Search:** Google Gemini with Search grounding returns the answer, its sources and Google's required Search Suggestions. The model then rewrites the answer to fit the writer's sentence. Without Gemini, Lina can answer from Wikipedia's REST API in the question's language.
 - **On-device pieces:** Apple's Speech framework for hold-to-talk, Vision OCR for screenshots, Spotlight's `kMDItemIsScreenCapture` to notice new screenshots, and Ollama's API to recommend, download and switch local models.
-- **Server (built, not yet deployed):** Supabase Auth with emailed codes, and a `lina-ai` Edge Function that holds provider keys, enforces per-user daily quotas in Postgres and allowlists models.
+- **Server:** Supabase Auth with emailed codes, and a `lina-ai` Edge Function that holds provider keys, enforces per-user daily quotas in Postgres and allowlists models.
 
 ### Challenges we ran into
 
@@ -87,7 +87,6 @@ Restraint is the feature. Asking Nemotron for exactly one question under 20 word
 
 ### What's next for Lina
 
-- Deploy the `lina-ai` server so people can sign in and use Lina without their own keys
 - Skills: `/lina cite`, `/lina translate`, a team style guide, Notion and Google Docs search
 - Signed and notarized releases, and a Homebrew cask
 - Intel Mac support

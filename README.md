@@ -70,7 +70,7 @@ The first time you use each part, a small tip appears under your own text with a
 
 ## Install
 
-**Quickest:** download [Lina.zip](https://github.com/Sppdd/lina/releases/latest/download/Lina.zip), unzip it and drag **Lina.app** into Applications. Lina isn't notarized yet, so the first time macOS blocks it, open **System Settings → Privacy & Security** and click **Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Lina.app`). Then paste a free [Nebius Token Factory](https://tokenfactory.nebius.com) key when onboarding asks; a [Gemini key](https://aistudio.google.com/apikey) adds live web answers.
+**Quickest:** download [Lina.zip](https://github.com/Sppdd/lina/releases/latest/download/Lina.zip), unzip it and drag **Lina.app** into Applications. Lina isn't notarized yet, so the first time macOS blocks it, open **System Settings → Privacy & Security** and click **Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Lina.app`). Then sign in with your email and the code Lina sends you: the release talks to Lina's server, so you need no keys. You can also skip sign-in and paste your own free [Nebius Token Factory](https://tokenfactory.nebius.com) key (a [Gemini key](https://aistudio.google.com/apikey) adds live web answers).
 
 **From source.** Requirements: macOS 14+, Apple Silicon, Xcode 16+ command line tools.
 

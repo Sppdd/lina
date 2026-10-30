@@ -7,9 +7,10 @@ and **Supabase** for accounts, limits and the server that holds the keys.
 > Facts marked *(verify)* came from search results, not from reading the provider's page directly.
 > Check them on the linked pages before you rely on them.
 
-> **Status (Phase 1 built, not yet deployed):** the app signs people in with an emailed code and sends every request
-> through the `lina-ai` Edge Function when it's connected to a Supabase project. The database migration, the function
-> and the email template are in [`supabase/`](../supabase). Section 8 has the deploy steps.
+> **Status (Phase 1 deployed, 30 Oct 2026):** the `lina` project (`aciwoqsepwuccqkvdwsq`) has the migrations, the
+> Nebius and Gemini secrets and the `lina-ai` function, and release builds carry its URL. The app signs people in with
+> an emailed code and sends every request through `lina-ai`. Still to do: custom SMTP, since the built-in sender only
+> manages a few emails an hour. Section 8 has the deploy steps; deploy with `--use-api` if Docker isn't running.
 
 ## The short answer
 
