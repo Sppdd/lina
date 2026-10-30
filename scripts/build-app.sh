@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Builds Lina.app (release) into ./build. Usage: scripts/build-app.sh [--open]
+# Builds Lina.app (release) and Lina.zip into ./build. Usage: scripts/build-app.sh [--open]
+# For a release others can open without a warning: SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=lina
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -63,12 +64,35 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Ad-hoc signatures change with every build, and macOS ties the Accessibility switch to the signature,
-# so a rebuilt Lina would show as allowed but be refused. Pin the requirement to the bundle ID instead,
-# so the permission you granted survives rebuilds.
-echo "› Signing (ad-hoc, stable requirement)"
-codesign --force --deep --sign - --identifier app.lina.mac \
-  --requirements '=designated => identifier "app.lina.mac"' "$APP" >/dev/null
-echo "✓ Built $APP"
+# Release builds for other people: set SIGN_IDENTITY to a "Developer ID Application" certificate and
+# NOTARY_PROFILE to a notarytool keychain profile, and Lina is signed, notarized and stapled, so macOS opens it
+# without a warning. Without them it's signed ad-hoc for this Mac.
+SIGN_IDENTITY=${SIGN_IDENTITY:-}
+NOTARY_PROFILE=${NOTARY_PROFILE:-}
+if [[ -n "$SIGN_IDENTITY" ]]; then
+  echo "› Signing with $SIGN_IDENTITY (hardened runtime)"
+  codesign --force --options runtime --timestamp --entitlements scripts/Lina.entitlements \
+    --sign "$SIGN_IDENTITY" "$APP"
+  codesign --verify --strict --verbose=1 "$APP"
+  if [[ -n "$NOTARY_PROFILE" ]]; then
+    echo "› Notarizing (this takes a few minutes)"
+    rm -f build/Lina-notarize.zip
+    ditto -c -k --keepParent "$APP" build/Lina-notarize.zip
+    xcrun notarytool submit build/Lina-notarize.zip --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun stapler staple "$APP"
+    rm -f build/Lina-notarize.zip
+    spctl --assess --type execute --verbose "$APP"
+  fi
+else
+  # Ad-hoc signatures change with every build, and macOS ties the Accessibility switch to the signature,
+  # so pin the requirement to the bundle ID: the permission you granted survives rebuilds.
+  echo "› Signing (ad-hoc, stable requirement)"
+  codesign --force --deep --sign - --identifier app.lina.mac \
+    --requirements '=designated => identifier "app.lina.mac"' "$APP" >/dev/null
+fi
+
+rm -f build/Lina.zip
+ditto -c -k --sequesterRsrc --keepParent "$APP" build/Lina.zip
+echo "✓ Built $APP and build/Lina.zip"
 
 if [[ "${1:-}" == "--open" ]]; then open "$APP"; fi
