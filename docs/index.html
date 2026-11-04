@@ -51,7 +51,7 @@ nav .spacer { flex: 1; }
 .pill svg { width: 15px; height: 15px; }
 
 /* Hero */
-.hero { padding: 92px 0 40px; }
+.hero { padding-top: 92px; padding-bottom: 40px; }
 h1, h2 { font-weight: 500; letter-spacing: -.02em; margin: 0; }
 h1 { font-size: clamp(38px, 6vw, 64px); line-height: 1.04; }
 h2 { font-size: clamp(28px, 3.6vw, 40px); line-height: 1.12; }
@@ -148,7 +148,7 @@ pre { margin: 22px 0 0; padding: 18px 20px; border-radius: 14px; background: var
 pre .c { color: var(--faint); }
 
 /* Final */
-.final { text-align: center; padding: 140px 0 120px; }
+.final { text-align: center; padding-top: 140px; padding-bottom: 120px; }
 .final h2 { font-size: clamp(32px, 4.5vw, 48px); }
 .final p { color: var(--muted); margin: 14px 0 28px; }
 .final .cta { justify-content: center; }
@@ -210,6 +210,18 @@ footer a:hover { color: var(--text); }
 .moods { margin-top: 34px; border: 1px solid var(--line); border-radius: 18px; background: #fbfaf8; padding: 22px; }
 .moods img { width: 100%; display: block; }
 @media (max-width: 860px) { .shotgrid { grid-template-columns: 1fr; } }
+
+/* The install command: the site's main call to action. */
+.cmdbox { display: flex; align-items: center; gap: 12px; max-width: 640px; margin: 4px 0 0; padding: 10px 10px 10px 18px; border-radius: 14px;
+  background: #16151c; border: 1px solid var(--line-2); box-shadow: 0 12px 40px rgba(75,63,207,.18); }
+.cmdbox .prompt { font: 600 15px var(--mono); color: var(--ink); }
+.cmdbox code { flex: 1; min-width: 0; font: 15px/1.5 var(--mono); color: #e9e7f4; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.cmdbox code::-webkit-scrollbar { display: none; }
+.cmdbox .copy { all: unset; cursor: pointer; flex-shrink: 0; padding: 9px 16px; border-radius: 10px; background: var(--text); color: #111;
+  font: 600 13.5px var(--sans); transition: transform .15s; }
+.cmdbox .copy:hover { transform: translateY(-1px); }
+.final .cmdbox { margin: 0 auto; }
+#install .cmdbox { margin-top: 26px; }
 </style>
 </head>
 <body>
@@ -226,21 +238,15 @@ footer a:hover { color: var(--text); }
       <a href="https://github.com/Sppdd/lina">GitHub</a>
     </div>
     <div class="spacer"></div>
-    <a class="pill light" href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.6 1.2-.1 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4 1-1.4 1.3-2.7 1.4-2.8-.1 0-2.6-1-2.6-3.9zM13.9 5c.7-.8 1.1-1.9 1-3-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.4z"/></svg>
-      <span>Download<span class="long"> for Mac</span></span>
-    </a>
+    <a class="pill light" href="#install"><span>Install<span class="long"> in Terminal</span></span></a>
   </div>
 </nav>
 
 <header class="hero wrap">
   <h1>Most AI writing tools interrupt you.<br><span class="dim">Lina waits until you ask.</span></h1>
   <p class="lede">Lina is a free, open-source writing helper for macOS. Type <span class="cmd" style="color:var(--ink);background:rgba(133,117,247,.12)">/lina</span> and what you want, in any field of any app, and press Return. Look something up, get a question that makes you think, rewrite a paragraph or draw a picture. Nothing goes into your text until you press ⌘1.</p>
-  <div class="cta">
-    <a class="pill light" href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>Download for Mac</a>
-    <a class="pill ghost" href="https://github.com/Sppdd/lina">View the source</a>
-  </div>
-  <div class="fine">macOS 14 or later · Apple Silicon · MIT licensed · Or in Terminal: <code style="font:12px var(--mono);color:var(--muted)">curl -fsSL https://sppdd.github.io/lina/install.sh | zsh</code></div>
+  <div class="cmdbox"><span class="prompt">$</span><code>curl -fsSL https://sppdd.github.io/lina/install.sh | zsh</code><button class="copy" type="button" aria-label="Copy the install command">Copy</button></div>
+  <div class="fine">Paste it in Terminal (⌘ Space, type “Terminal”). macOS 14 or later · Apple Silicon · MIT licensed · <a href="install.sh" style="text-decoration:underline">Read the script</a> · <a href="https://github.com/Sppdd/lina" style="text-decoration:underline">Source</a></div>
   <div class="badges">
     <span class="badge">Runs on <b>NVIDIA Nemotron</b></span>
     <span class="badge">Served by Nebius Token Factory</span>
@@ -331,21 +337,16 @@ footer a:hover { color: var(--text); }
 
 <section id="install" class="wrap">
   <div class="eyebrow">Try it in five minutes</div>
-  <h2>Download, open, <span class="dim">type /lina.</span></h2>
+  <h2>Paste one line, <span class="dim">then type /lina.</span></h2>
   <div class="steps">
-    <div class="card"><h4>Download</h4><p><a href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip" style="color:var(--ink)">Lina.zip</a>, unzip it, and drag <b>Lina.app</b> into Applications.</p></div>
-    <div class="card"><h4>Seeing “Lina Not Opened”?</h4><p>Lina isn't notarized by Apple yet. Click <b>Done</b> (not Move to Trash), then <b>System Settings → Privacy &amp; Security → Open Anyway</b>. The one-line install below skips this.</p></div>
+    <div class="card"><h4>Open Terminal</h4><p>Press <kbd>⌘ Space</kbd>, type <b>Terminal</b> and press Return.</p></div>
+    <div class="card"><h4>Paste the command</h4><p>It downloads the latest Lina into Applications, checks it, and opens it. No “could not verify” warning.</p></div>
     <div class="card"><h4>Allow Accessibility</h4><p>The welcome screen asks for it, so Lina can read the line you're on when you ask.</p></div>
     <div class="card"><h4>Sign in</h4><p>Enter your email and the code Lina sends you. No keys needed. Or paste your own <a href="https://tokenfactory.nebius.com" style="color:var(--ink)">Nebius Token Factory</a> key, or pick <b>On this Mac</b>.</p></div>
   </div>
-  <pre><span class="c"># Easiest: install with one line in Terminal. No "could not verify" warning.</span>
-curl -fsSL https://sppdd.github.io/lina/install.sh | zsh
-<span class="c"># (It's short: <a href="install.sh" style="color:var(--ink)">read it first</a>.)</span>
-
-<span class="c"># Downloaded the zip and macOS blocks it? Clear the download flag:</span>
-xattr -dr com.apple.quarantine /Applications/Lina.app
-
-<span class="c"># Or build it from source (Xcode 16 command line tools):</span>
+  <div class="cmdbox"><span class="prompt">$</span><code>curl -fsSL https://sppdd.github.io/lina/install.sh | zsh</code><button class="copy" type="button" aria-label="Copy the install command">Copy</button></div>
+  <pre><span class="c"># Run the same command again any time to update Lina.</span>
+<span class="c"># Developers can build it from source instead (Xcode 16 command line tools):</span>
 git clone https://github.com/Sppdd/lina.git && cd lina
 scripts/build-app.sh --open</pre>
   <p class="muted" style="font-size:14px;margin-top:16px">Then type <span class="cmd" style="color:var(--ink)">/lina help</span> in any app to see every command.</p>
@@ -353,9 +354,9 @@ scripts/build-app.sh --open</pre>
 
 <div class="final wrap">
   <h2>Write in peace. Ask when you need her.</h2>
-  <p>Lina is free and open source.</p>
-  <div class="cta">
-    <a class="pill light" href="https://github.com/Sppdd/lina/releases/latest/download/Lina.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>Download for Mac</a>
+  <p>Lina is free and open source. Paste this in Terminal:</p>
+  <div class="cmdbox"><span class="prompt">$</span><code>curl -fsSL https://sppdd.github.io/lina/install.sh | zsh</code><button class="copy" type="button" aria-label="Copy the install command">Copy</button></div>
+  <div class="cta" style="margin-top:18px">
     <a class="pill ghost" href="https://github.com/Sppdd/lina">Star on GitHub</a>
   </div>
 </div>
@@ -432,6 +433,15 @@ scripts/build-app.sh --open</pre>
   addEventListener('resize', () => card.classList.contains('show') && placeCard());
   (async () => { for (;;) { await searchScene(); await fixScene(); } })();
 })();
+</script>
+<script>
+// Copy the install command; fall back to selecting it where the clipboard API isn't allowed.
+document.querySelectorAll('.cmdbox .copy').forEach(btn => btn.addEventListener('click', async () => {
+  const code = btn.parentElement.querySelector('code');
+  try { await navigator.clipboard.writeText(code.textContent); btn.textContent = 'Copied'; }
+  catch { const r = document.createRange(); r.selectNodeContents(code); getSelection().removeAllRanges(); getSelection().addRange(r); btn.textContent = 'Press ⌘C'; }
+  setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+}));
 </script>
 </body>
 </html>
